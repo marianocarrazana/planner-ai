@@ -1,12 +1,21 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { getWorkspaceCwd } from "../workspace.js";
 import {
+  createCallAbort,
+  isAbortError,
+  ProviderAbortError,
+} from "./callAbort.js";
+import {
   CONSENSUS_SYSTEM,
   PROPOSE_SYSTEM,
   consensusUserPrompt,
   proposeUserPrompt,
 } from "./prompts.js";
-import type { ConsensusProvider, ModelProvider } from "./types.js";
+import type {
+  ConsensusProvider,
+  ModelProvider,
+  ProviderCallOptions,
+} from "./types.js";
 
 const READ_TOOLS = ["Read", "Glob", "Grep"] as const;
 
@@ -23,12 +32,16 @@ async function runClaude(
   modelId: string,
   system: string,
   prompt: string,
+  options?: ProviderCallOptions,
 ): Promise<string> {
   const cwd = getWorkspaceCwd();
   let resultText: string | undefined;
   let errorDetail: string | undefined;
+  const abort = createCallAbort(options);
 
   try {
+    abort.throwIfAborted();
+
     for await (const message of query({
       prompt,
       options: {
@@ -41,6 +54,7 @@ async function runClaude(
         permissionMode: "dontAsk",
         maxTurns: 20,
         env: claudeEnv(token),
+        abortController: abort.controller,
       },
     })) {
       if (message.type !== "result") continue;
@@ -55,15 +69,36 @@ async function runClaude(
       }
     }
   } catch (err) {
+    if (isAbortError(err) || abort.signal.aborted) {
+      const reason = abort.signal.reason;
+      throw reason instanceof Error
+        ? reason
+        : new ProviderAbortError(
+            typeof reason === "string" && reason.length > 0
+              ? reason
+              : "Aborted",
+          );
+    }
     throw new Error(
       err instanceof Error
         ? `Claude Agent SDK failed: ${err.message}`
         : `Claude Agent SDK failed: ${String(err)}`,
     );
+  } finally {
+    abort.cleanup();
   }
 
   if (resultText) {
     return resultText;
+  }
+
+  if (abort.signal.aborted) {
+    const reason = abort.signal.reason;
+    throw reason instanceof Error
+      ? reason
+      : new ProviderAbortError(
+          typeof reason === "string" && reason.length > 0 ? reason : "Aborted",
+        );
   }
 
   throw new Error(
@@ -81,13 +116,14 @@ export function createAnthropicProposer(
   return {
     id: `anthropic:${modelId}`,
     label,
-    async propose(goal: string): Promise<string> {
+    async propose(goal: string, options?: ProviderCallOptions): Promise<string> {
       const cwd = getWorkspaceCwd();
       return runClaude(
         token,
         modelId,
         PROPOSE_SYSTEM,
         proposeUserPrompt(goal, cwd),
+        options,
       );
     },
   };
@@ -98,13 +134,14 @@ export function createAnthropicConsensus(
   modelId: string,
 ): ConsensusProvider {
   return {
-    async reconcile(goal, proposals): Promise<string> {
+    async reconcile(goal, proposals, options?: ProviderCallOptions) {
       const cwd = getWorkspaceCwd();
       return runClaude(
         token,
         modelId,
         CONSENSUS_SYSTEM,
         consensusUserPrompt(goal, cwd, proposals),
+        options,
       );
     },
   };

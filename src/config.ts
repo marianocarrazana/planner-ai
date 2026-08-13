@@ -7,6 +7,8 @@ export interface AppConfig {
   claudeCodeOAuthToken?: string;
   cursorApiKey?: string;
   modelSelection?: ModelSelection;
+  /** When true, show mock models even if real credentials are set. */
+  includeMocks?: boolean;
 }
 
 export type ConfigCredentialKey = "claudeCodeOAuthToken" | "cursorApiKey";
@@ -117,6 +119,10 @@ function normalizeConfig(raw: unknown): AppConfig {
     config.modelSelection = modelSelection;
   }
 
+  if (obj.includeMocks === true) {
+    config.includeMocks = true;
+  }
+
   return config;
 }
 
@@ -184,6 +190,14 @@ export async function saveConfig(partial: AppConfig): Promise<AppConfig> {
 
   if (partial.modelSelection !== undefined) {
     next.modelSelection = partial.modelSelection;
+  }
+
+  if (partial.includeMocks !== undefined) {
+    if (partial.includeMocks) {
+      next.includeMocks = true;
+    } else {
+      delete next.includeMocks;
+    }
   }
 
   await writeConfigFile(next);

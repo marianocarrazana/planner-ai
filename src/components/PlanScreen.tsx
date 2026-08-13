@@ -2,9 +2,9 @@ import { useKeyboard, useRenderer } from "@opentui/react";
 import type { Phase, ProposalState } from "../pipeline/types.js";
 import { Clickable } from "./Clickable.js";
 import { ConsensusView } from "./ConsensusView.js";
-import { DoneView } from "./DoneView.js";
 import { GoalInput } from "./GoalInput.js";
 import { ProposalList } from "./ProposalList.js";
+import { ResultBrowser } from "./ResultBrowser.js";
 
 export type PlanGate = "ready" | "need-models" | "need-auth";
 
@@ -13,13 +13,18 @@ interface PlanScreenProps {
   gate: PlanGate;
   goal: string;
   proposals: ProposalState[];
+  consensusStartedAt: number | null;
   planPath: string | null;
+  plan: string | null;
   error: string | null;
   failingLabels: string[];
   onSubmitGoal: (goal: string) => void;
   onGoModels: () => void;
   onGoAuth: () => void;
   onResetFailingKeys: () => void;
+  onPlanAnother: () => void;
+  onRetry: () => void;
+  onBackToIdle: () => void;
 }
 
 const DIM = "#888888";
@@ -29,13 +34,18 @@ export function PlanScreen({
   gate,
   goal: _goal,
   proposals,
+  consensusStartedAt,
   planPath,
+  plan,
   error,
   failingLabels,
   onSubmitGoal,
   onGoModels,
   onGoAuth,
   onResetFailingKeys,
+  onPlanAnother,
+  onRetry,
+  onBackToIdle,
 }: PlanScreenProps) {
   const renderer = useRenderer();
   const canResetAuth = failingLabels.length > 0;
@@ -43,8 +53,18 @@ export function PlanScreen({
   useKeyboard((key) => {
     if (phase !== "error") return;
 
-    if (key.name === "q" || key.name === "escape") {
+    if (key.name === "q") {
       renderer.destroy();
+      return;
+    }
+
+    if (key.name === "escape") {
+      onBackToIdle();
+      return;
+    }
+
+    if (key.name === "return") {
+      onRetry();
       return;
     }
 
@@ -61,10 +81,10 @@ export function PlanScreen({
         </text>
         <text fg={DIM}>
           Add at least one provider token (or skip both for mocks) on the Auth
-          tab, then pick models.
+          tab, then pick proposers and consensus.
         </text>
         <Clickable onClick={onGoAuth}>
-          <text fg="cyan">→ Open Auth tab (or Ctrl+3)</text>
+          <text fg="cyan">→ Open Auth tab (or Ctrl+4)</text>
         </Clickable>
       </box>
     );
@@ -80,7 +100,7 @@ export function PlanScreen({
           Select proposers and a consensus model before running a plan.
         </text>
         <Clickable onClick={onGoModels}>
-          <text fg="cyan">→ Open Models tab (or Ctrl+2)</text>
+          <text fg="cyan">→ Open Proposers tab (or Ctrl+2)</text>
         </Clickable>
       </box>
     );
@@ -98,7 +118,7 @@ export function PlanScreen({
     return (
       <box flexDirection="column" gap={1}>
         <ProposalList proposals={proposals} />
-        <ConsensusView />
+        <ConsensusView startedAt={consensusStartedAt} />
       </box>
     );
   }
@@ -112,8 +132,15 @@ export function PlanScreen({
     );
   }
 
-  if (phase === "done" && planPath) {
-    return <DoneView planPath={planPath} />;
+  if (phase === "done" && planPath && plan !== null) {
+    return (
+      <ResultBrowser
+        planPath={planPath}
+        plan={plan}
+        proposals={proposals}
+        onPlanAnother={onPlanAnother}
+      />
+    );
   }
 
   if (phase === "error") {
@@ -126,12 +153,18 @@ export function PlanScreen({
         {proposals.length > 0 ? <ProposalList proposals={proposals} /> : null}
         {canResetAuth ? (
           <text fg={DIM}>
-            Press r to remove {failingLabels.join(" and ")} and re-enter · q to
-            quit
+            Enter retry · Esc plan another · Press r to remove{" "}
+            {failingLabels.join(" and ")} and re-enter · q to quit
           </text>
         ) : (
-          <text fg={DIM}>Press q to quit</text>
+          <text fg={DIM}>Enter retry · Esc plan another · q to quit</text>
         )}
+        <Clickable onClick={onRetry}>
+          <text fg="cyan">→ Retry (or press Enter)</text>
+        </Clickable>
+        <Clickable onClick={onBackToIdle}>
+          <text fg="cyan">→ Plan another (or press Esc)</text>
+        </Clickable>
         {canResetAuth ? (
           <Clickable onClick={onResetFailingKeys}>
             <text fg="cyan">→ Clear failing credentials (or press r)</text>

@@ -1,10 +1,21 @@
+import {
+  formatElapsedSeconds,
+  useElapsedSeconds,
+} from "./useElapsedSeconds.js";
+
 interface ConsensusViewProps {
   writing?: boolean;
+  startedAt?: number | null;
 }
 
 const DIM = "#888888";
 
-export function ConsensusView({ writing = false }: ConsensusViewProps) {
+export function ConsensusView({
+  writing = false,
+  startedAt = null,
+}: ConsensusViewProps) {
+  const elapsedSeconds = useElapsedSeconds(startedAt, !writing && startedAt != null);
+
   return (
     <box flexDirection="column" gap={1}>
       <text>
@@ -13,7 +24,9 @@ export function ConsensusView({ writing = false }: ConsensusViewProps) {
       <text fg={DIM}>
         {writing
           ? "Saving plan.md…"
-          : "Reconciling proposals into one plan…"}
+          : elapsedSeconds != null
+            ? `Reconciling proposals into one plan… ${formatElapsedSeconds(elapsedSeconds)}`
+            : "Reconciling proposals into one plan…"}
       </text>
     </box>
   );

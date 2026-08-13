@@ -14,6 +14,8 @@ export interface ProposalState {
   status: ProposalStatus;
   body?: string;
   error?: string;
+  /** Epoch ms when this proposer entered "streaming"; used for elapsed UI. */
+  startedAt?: number;
 }
 
 export interface PipelineResult {
@@ -25,4 +27,5 @@ export interface PipelineResult {
 export interface PipelineCallbacks {
   onPhase: (phase: Phase) => void;
   onProposals: (proposals: ProposalState[]) => void;
+  onConsensusStarted?: (startedAt: number) => void;
 }

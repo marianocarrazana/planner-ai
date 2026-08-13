@@ -162,7 +162,7 @@ export function AuthScreen({
         })}
       </box>
 
-      <text fg={DIM}>↑↓ move · Enter/Space activate · Ctrl+1/2/3 switch tabs</text>
+      <text fg={DIM}>↑↓ move · Enter/Space activate · Ctrl+1–4 switch tabs</text>
     </box>
   );
 }

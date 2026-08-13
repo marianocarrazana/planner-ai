@@ -1,5 +1,10 @@
-import type { ConsensusProvider, ModelProvider } from "../providers/types.js";
+import type {
+  ConsensusProvider,
+  ModelProvider,
+  ProviderCallOptions,
+} from "../providers/types.js";
 import { writePlan } from "../writePlan.js";
+import { writeRunArchive } from "../writeRunArchive.js";
 import type {
   PipelineCallbacks,
   PipelineResult,
@@ -11,6 +16,7 @@ export async function runPipeline(
   proposers: ModelProvider[],
   consensus: ConsensusProvider,
   callbacks: PipelineCallbacks,
+  options?: ProviderCallOptions,
 ): Promise<PipelineResult> {
   const trimmed = goal.trim();
   if (!trimmed) {
@@ -29,12 +35,17 @@ export async function runPipeline(
   callbacks.onPhase("proposing");
   emit();
 
-  proposals = proposals.map((p) => ({ ...p, status: "streaming" }));
+  const streamingStartedAt = Date.now();
+  proposals = proposals.map((p) => ({
+    ...p,
+    status: "streaming",
+    startedAt: streamingStartedAt,
+  }));
   emit();
 
   const settled = await Promise.allSettled(
     proposers.map(async (provider) => {
-      const body = await provider.propose(trimmed);
+      const body = await provider.propose(trimmed, options);
       return { id: provider.id, body };
     }),
   );
@@ -46,12 +57,14 @@ export async function runPipeline(
         ...proposal,
         status: "done",
         body: result.value.body,
+        startedAt: undefined,
       };
     }
     return {
       ...proposal,
       status: "error",
       error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      startedAt: undefined,
     };
   });
   emit();
@@ -66,10 +79,12 @@ export async function runPipeline(
   }
 
   callbacks.onPhase("consensus");
-  const plan = await consensus.reconcile(trimmed, successful);
+  callbacks.onConsensusStarted?.(Date.now());
+  const plan = await consensus.reconcile(trimmed, successful, options);
 
   callbacks.onPhase("writing");
   const planPath = await writePlan(plan);
+  await writeRunArchive({ plan, proposals });
 
   callbacks.onPhase("done");
   return { planPath, plan, proposals };

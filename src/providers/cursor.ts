@@ -1,12 +1,21 @@
 import { Agent } from "@cursor/sdk";
 import { getWorkspaceCwd } from "../workspace.js";
 import {
+  createCallAbort,
+  isAbortError,
+  ProviderAbortError,
+} from "./callAbort.js";
+import {
   CONSENSUS_SYSTEM,
   PROPOSE_SYSTEM,
   consensusUserPrompt,
   proposeUserPrompt,
 } from "./prompts.js";
-import type { ConsensusProvider, ModelProvider } from "./types.js";
+import type {
+  ConsensusProvider,
+  ModelProvider,
+  ProviderCallOptions,
+} from "./types.js";
 
 const READ_TOOLS = ["read", "grep", "glob", "ls", "semSearch"] as const;
 
@@ -14,9 +23,13 @@ async function runPrompt(
   apiKey: string,
   modelId: string,
   prompt: string,
+  options?: ProviderCallOptions,
 ): Promise<string> {
   const cwd = getWorkspaceCwd();
-  const result = await Agent.prompt(prompt, {
+  const abort = createCallAbort(options);
+  abort.throwIfAborted();
+
+  await using agent = await Agent.create({
     apiKey,
     model: { id: modelId },
     local: {
@@ -26,17 +39,61 @@ async function runPrompt(
     tools: [...READ_TOOLS],
   });
 
-  if (result.status !== "finished") {
-    const detail = result.error?.message ?? result.status;
-    throw new Error(`Cursor agent failed: ${detail}`);
+  const run = await agent.send(prompt);
+
+  const onAbort = () => {
+    if (run.supports("cancel")) {
+      void run.cancel();
+    }
+  };
+
+  if (abort.signal.aborted) {
+    onAbort();
+  } else {
+    abort.signal.addEventListener("abort", onAbort, { once: true });
   }
 
-  const text = result.result?.trim();
-  if (!text) {
-    throw new Error("Cursor returned empty text");
-  }
+  try {
+    const result = await run.wait();
 
-  return text;
+    if (abort.signal.aborted || result.status === "cancelled") {
+      const reason = abort.signal.reason;
+      throw reason instanceof Error
+        ? reason
+        : new ProviderAbortError(
+            typeof reason === "string" && reason.length > 0
+              ? reason
+              : "Aborted",
+          );
+    }
+
+    if (result.status !== "finished") {
+      const detail = result.error?.message ?? result.status;
+      throw new Error(`Cursor agent failed: ${detail}`);
+    }
+
+    const text = result.result?.trim();
+    if (!text) {
+      throw new Error("Cursor returned empty text");
+    }
+
+    return text;
+  } catch (err) {
+    if (isAbortError(err) || abort.signal.aborted) {
+      const reason = abort.signal.reason;
+      throw reason instanceof Error
+        ? reason
+        : new ProviderAbortError(
+            typeof reason === "string" && reason.length > 0
+              ? reason
+              : "Aborted",
+          );
+    }
+    throw err;
+  } finally {
+    abort.signal.removeEventListener("abort", onAbort);
+    abort.cleanup();
+  }
 }
 
 export function createCursorProposer(
@@ -47,12 +104,13 @@ export function createCursorProposer(
   return {
     id: `cursor:${modelId}`,
     label,
-    async propose(goal: string): Promise<string> {
+    async propose(goal: string, options?: ProviderCallOptions): Promise<string> {
       const cwd = getWorkspaceCwd();
       return runPrompt(
         apiKey,
         modelId,
         `${PROPOSE_SYSTEM}\n\n${proposeUserPrompt(goal, cwd)}`,
+        options,
       );
     },
   };
@@ -63,12 +121,13 @@ export function createCursorConsensus(
   modelId: string,
 ): ConsensusProvider {
   return {
-    async reconcile(goal, proposals): Promise<string> {
+    async reconcile(goal, proposals, options?: ProviderCallOptions) {
       const cwd = getWorkspaceCwd();
       return runPrompt(
         apiKey,
         modelId,
         `${CONSENSUS_SYSTEM}\n\n${consensusUserPrompt(goal, cwd, proposals)}`,
+        options,
       );
     },
   };

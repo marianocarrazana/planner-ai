@@ -23,24 +23,6 @@ export interface ProviderCredentialsForModels {
   cursorApiKey?: string;
 }
 
-const ANTHROPIC_MODELS: ModelChoice[] = [
-  {
-    provider: "anthropic",
-    modelId: "claude-sonnet-4-6",
-    label: "Claude Sonnet 4.6",
-  },
-  {
-    provider: "anthropic",
-    modelId: "claude-opus-4-6",
-    label: "Claude Opus 4.6",
-  },
-  {
-    provider: "anthropic",
-    modelId: "claude-haiku-4-5-20251001",
-    label: "Claude Haiku 4.5",
-  },
-];
-
 const CURSOR_FALLBACK_MODELS: ModelChoice[] = [
   {
     provider: "cursor",
@@ -69,8 +51,19 @@ function choiceKey(choice: ModelPick): string {
   return `${choice.provider}:${choice.modelId}`;
 }
 
+function sourceLabel(provider: ProviderKind): string {
+  switch (provider) {
+    case "anthropic":
+      return "claude";
+    case "cursor":
+      return "cursor";
+    case "mock":
+      return "mock";
+  }
+}
+
 export function formatChoiceLabel(choice: ModelChoice): string {
-  return `${choice.label} · ${choice.modelId}`;
+  return `${choice.label} · ${sourceLabel(choice.provider)} · ${choice.modelId}`;
 }
 
 export function findChoiceLabel(
@@ -81,6 +74,76 @@ export function findChoiceLabel(
     (c) => c.provider === pick.provider && c.modelId === pick.modelId,
   );
   return found?.label ?? `${pick.provider}:${pick.modelId}`;
+}
+
+interface AnthropicModelsPage {
+  data?: unknown[];
+  has_more?: boolean;
+  last_id?: string | null;
+}
+
+function anthropicModelChoice(raw: unknown): ModelChoice | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const id = typeof obj.id === "string" ? obj.id.trim() : "";
+  if (!id) return null;
+  const displayName =
+    typeof obj.display_name === "string" && obj.display_name.trim()
+      ? obj.display_name.trim()
+      : id;
+  return { provider: "anthropic", modelId: id, label: displayName };
+}
+
+/** List Claude models via Anthropic Models API using a Claude Code OAuth token. */
+export async function loadAnthropicChoices(
+  oauthToken: string,
+): Promise<ModelChoice[]> {
+  try {
+    const listed: ModelChoice[] = [];
+    const seen = new Set<string>();
+    let afterId: string | undefined;
+
+    for (;;) {
+      const url = new URL("https://api.anthropic.com/v1/models");
+      url.searchParams.set("limit", "1000");
+      if (afterId) url.searchParams.set("after_id", afterId);
+
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          "anthropic-version": "2023-06-01",
+          "anthropic-beta": "oauth-2025-04-20",
+          Authorization: `Bearer ${oauthToken}`,
+        },
+      });
+
+      if (!res.ok) {
+        return [];
+      }
+
+      const page = (await res.json()) as AnthropicModelsPage;
+      const rows = Array.isArray(page.data) ? page.data : [];
+
+      for (const row of rows) {
+        const choice = anthropicModelChoice(row);
+        if (!choice || seen.has(choice.modelId)) continue;
+        seen.add(choice.modelId);
+        listed.push(choice);
+      }
+
+      if (!page.has_more) break;
+      const next =
+        typeof page.last_id === "string" && page.last_id.trim()
+          ? page.last_id.trim()
+          : undefined;
+      if (!next || next === afterId) break;
+      afterId = next;
+    }
+
+    return listed;
+  } catch {
+    return [];
+  }
 }
 
 export async function loadCursorChoices(
@@ -124,20 +187,26 @@ export async function loadCursorChoices(
 
 export async function availableChoices(
   creds: ProviderCredentialsForModels,
+  opts?: { includeMocks?: boolean },
 ): Promise<ModelChoice[]> {
   const claudeToken = nonEmpty(creds.claudeCodeOAuthToken);
   const cursorKey = nonEmpty(creds.cursorApiKey);
   const choices: ModelChoice[] = [];
 
   if (claudeToken) {
-    choices.push(...ANTHROPIC_MODELS);
+    choices.push(...(await loadAnthropicChoices(claudeToken)));
   }
 
   if (cursorKey) {
     choices.push(...(await loadCursorChoices(cursorKey)));
   }
 
-  choices.push(...MOCK_MODELS);
+  const showMocks =
+    opts?.includeMocks === true || (!claudeToken && !cursorKey);
+  if (showMocks) {
+    choices.push(...MOCK_MODELS);
+  }
+
   return choices;
 }
 

@@ -1,6 +1,6 @@
 import { Clickable } from "./Clickable.js";
 
-export type AppTab = "plan" | "models" | "auth";
+export type AppTab = "plan" | "proposers" | "consensus" | "auth";
 
 interface AppTabsProps {
   active: AppTab;
@@ -9,7 +9,8 @@ interface AppTabsProps {
 
 const TABS: { id: AppTab; label: string }[] = [
   { id: "plan", label: "Plan" },
-  { id: "models", label: "Models" },
+  { id: "proposers", label: "Proposers" },
+  { id: "consensus", label: "Consensus" },
   { id: "auth", label: "Auth" },
 ];
 

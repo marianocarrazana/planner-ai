@@ -45,7 +45,7 @@ function startupTab(creds: AppConfig, choices: ModelChoice[]): AppTab {
     return "auth";
   }
   if (!normalizeSelection(creds.modelSelection, choices)) {
-    return "models";
+    return "proposers";
   }
   return "plan";
 }
@@ -58,11 +58,17 @@ export function App() {
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [config, setConfig] = useState<AppConfig>({});
   const [choices, setChoices] = useState<ModelChoice[]>([]);
-  const [selection, setSelection] = useState<ModelSelection | null>(null);
+  const [draftSelection, setDraftSelection] = useState<ModelSelection | null>(
+    null,
+  );
   const [providers, setProviders] = useState<ResolvedProviders | null>(null);
   const [goal, setGoal] = useState("");
   const [proposals, setProposals] = useState<ProposalState[]>([]);
+  const [consensusStartedAt, setConsensusStartedAt] = useState<number | null>(
+    null,
+  );
   const [planPath, setPlanPath] = useState<string | null>(null);
+  const [plan, setPlan] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [failingKeys, setFailingKeys] = useState<ConfigCredentialKey[]>([]);
   const [loadingChoices, setLoadingChoices] = useState(false);
@@ -79,7 +85,9 @@ export function App() {
       setLoadingChoices(true);
 
       try {
-        const nextChoices = await availableChoices(creds);
+        const nextChoices = await availableChoices(creds, {
+          includeMocks: creds.includeMocks === true,
+        });
         const savedValid = normalizeSelection(
           creds.modelSelection,
           nextChoices,
@@ -89,7 +97,7 @@ export function App() {
           nextChoices,
         );
         setChoices(nextChoices);
-        setSelection(nextSelection);
+        setDraftSelection(nextSelection);
 
         if (savedValid) {
           setProviders(resolveProviders(creds, nextSelection, nextChoices));
@@ -173,7 +181,7 @@ export function App() {
       try {
         const next = await clearCredentials(keys);
         setProviders(null);
-        setSelection(null);
+        setDraftSelection(null);
         setPhase("idle");
         await reloadModels(next, "auth");
       } catch (err) {
@@ -190,7 +198,7 @@ export function App() {
       try {
         const next = await saveConfig({ modelSelection: nextSelection });
         setConfig(next);
-        setSelection(nextSelection);
+        setDraftSelection(nextSelection);
         const resolved = resolveProviders(next, nextSelection, choices);
         setProviders(resolved);
         setPhase("idle");
@@ -205,6 +213,23 @@ export function App() {
     [choices, goTab],
   );
 
+  const onToggleIncludeMocks = useCallback(async () => {
+    try {
+      const next = await saveConfig({
+        includeMocks: !(config.includeMocks === true),
+      });
+      const stay =
+        activeTab === "proposers" || activeTab === "consensus"
+          ? activeTab
+          : undefined;
+      await reloadModels(next, stay);
+    } catch (err) {
+      setPhase("error");
+      setError(err instanceof Error ? err.message : String(err));
+      goTab("plan");
+    }
+  }, [config.includeMocks, activeTab, reloadModels, goTab]);
+
   const start = useCallback(
     async (nextGoal: string) => {
       if (!providers) return;
@@ -213,7 +238,9 @@ export function App() {
       setError(null);
       setFailingKeys([]);
       setPlanPath(null);
+      setPlan(null);
       setProposals([]);
+      setConsensusStartedAt(null);
 
       let latestProposals: ProposalState[] = [];
 
@@ -228,9 +255,11 @@ export function App() {
               latestProposals = next;
               setProposals(next);
             },
+            onConsensusStarted: setConsensusStartedAt,
           },
         );
         setPlanPath(result.planPath);
+        setPlan(result.plan);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         const keys = collectFailingCredentialKeys({
@@ -252,13 +281,15 @@ export function App() {
     try {
       const next = await clearCredentials(failingKeys);
       setProviders(null);
-      setSelection(null);
+      setDraftSelection(null);
       setChoices([]);
       setFailingKeys([]);
       setError(null);
       setGoal("");
       setProposals([]);
+      setConsensusStartedAt(null);
       setPlanPath(null);
+      setPlan(null);
       setPhase("idle");
       await reloadModels(next, "auth");
     } catch (err) {
@@ -274,10 +305,14 @@ export function App() {
       return;
     }
     if (key.name === "2") {
-      goTab("models");
+      goTab("proposers");
       return;
     }
     if (key.name === "3") {
+      goTab("consensus");
+      return;
+    }
+    if (key.name === "4") {
       goTab("auth");
     }
   });
@@ -316,7 +351,10 @@ export function App() {
           <text fg={DIM}>config: {getConfigPath()}</text>
         )}
         {goal ? <text fg={DIM}>Goal: {goal}</text> : null}
-        <text fg={DIM}>Tabs: click or Ctrl+1 Plan · Ctrl+2 Models · Ctrl+3 Auth</text>
+        <text fg={DIM}>
+          Tabs: click or Ctrl+1 Plan · Ctrl+2 Proposers · Ctrl+3 Consensus ·
+          Ctrl+4 Auth
+        </text>
       </box>
 
       <AppTabs active={activeTab} onChange={goTab} />
@@ -330,29 +368,58 @@ export function App() {
             gate={planGate}
             goal={goal}
             proposals={proposals}
+            consensusStartedAt={consensusStartedAt}
             planPath={planPath}
+            plan={plan}
             error={error}
             failingLabels={failingLabels}
             onSubmitGoal={(nextGoal) => {
               void start(nextGoal);
             }}
-            onGoModels={() => goTab("models")}
+            onGoModels={() => goTab("proposers")}
             onGoAuth={() => goTab("auth")}
             onResetFailingKeys={() => {
               void removeFailingKeys();
             }}
+            onPlanAnother={() => {
+              setPlan(null);
+              setPlanPath(null);
+              setError(null);
+              setProposals([]);
+              setConsensusStartedAt(null);
+              setPhase("idle");
+            }}
+            onRetry={() => {
+              if (goal.trim()) void start(goal);
+            }}
+            onBackToIdle={() => {
+              setPlan(null);
+              setPlanPath(null);
+              setError(null);
+              setProposals([]);
+              setConsensusStartedAt(null);
+              setFailingKeys([]);
+              setPhase("idle");
+            }}
           />
         ) : null}
 
-        {!loadingConfig && activeTab === "models" ? (
+        {!loadingConfig &&
+        (activeTab === "proposers" || activeTab === "consensus") ? (
           loadingChoices ? (
             <text fg={DIM}>Loading models…</text>
-          ) : selection ? (
+          ) : draftSelection ? (
             <ModelSelect
+              mode={activeTab}
               choices={choices}
-              initial={selection}
+              value={draftSelection}
+              includeMocks={config.includeMocks === true}
+              onChange={setDraftSelection}
               onSubmit={(next) => {
                 void onModelSelection(next);
+              }}
+              onToggleIncludeMocks={() => {
+                void onToggleIncludeMocks();
               }}
             />
           ) : (

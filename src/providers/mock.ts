@@ -1,8 +1,9 @@
-import type { ConsensusProvider, ModelProvider } from "./types.js";
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+import { abortableSleep, createCallAbort } from "./callAbort.js";
+import type {
+  ConsensusProvider,
+  ModelProvider,
+  ProviderCallOptions,
+} from "./types.js";
 
 function createMockProposer(
   id: string,
@@ -13,8 +14,14 @@ function createMockProposer(
   return {
     id,
     label,
-    async propose(goal: string): Promise<string> {
-      await sleep(delayMs);
+    async propose(goal: string, options?: ProviderCallOptions): Promise<string> {
+      const abort = createCallAbort(options);
+      try {
+        abort.throwIfAborted();
+        await abortableSleep(delayMs, abort.signal);
+      } finally {
+        abort.cleanup();
+      }
       return [
         `# Proposal from ${label}`,
         "",
@@ -39,8 +46,14 @@ export const mockProposers: ModelProvider[] = [
 ];
 
 export const mockConsensus: ConsensusProvider = {
-  async reconcile(goal, proposals) {
-    await sleep(500);
+  async reconcile(goal, proposals, options?: ProviderCallOptions) {
+    const abort = createCallAbort(options);
+    try {
+      abort.throwIfAborted();
+      await abortableSleep(500, abort.signal);
+    } finally {
+      abort.cleanup();
+    }
     const sources = proposals.map((p) => `- ${p.id}`).join("\n");
     return [
       `# Plan`,

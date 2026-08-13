@@ -5,18 +5,35 @@ import {
   type ModelChoice,
   type ModelPick,
   type ModelSelection,
+  type ProviderKind,
 } from "../providers/models.js";
 import { Clickable } from "./Clickable.js";
 
-type Section = "proposers" | "consensus" | "continue";
+export type ModelSelectMode = "proposers" | "consensus";
 
 interface ModelSelectProps {
+  mode: ModelSelectMode;
   choices: ModelChoice[];
-  initial: ModelSelection;
+  value: ModelSelection;
+  includeMocks: boolean;
+  onChange: (next: ModelSelection) => void;
   onSubmit: (selection: ModelSelection) => void;
+  onToggleIncludeMocks: () => void;
 }
 
 const DIM = "#888888";
+
+const PROVIDER_ORDER: ProviderKind[] = ["anthropic", "cursor", "mock"];
+
+const PROVIDER_HEADERS: Record<ProviderKind, string> = {
+  anthropic: "Claude",
+  cursor: "Cursor",
+  mock: "Mock",
+};
+
+type DisplayRow =
+  | { kind: "header"; provider: ProviderKind; label: string }
+  | { kind: "choice"; choice: ModelChoice; choiceIndex: number };
 
 function pickKey(pick: ModelPick): string {
   return `${pick.provider}:${pick.modelId}`;
@@ -44,232 +61,345 @@ function visibleWindow(
   return { start, end: start + windowSize };
 }
 
-export function ModelSelect({ choices, initial, onSubmit }: ModelSelectProps) {
+function providerSourceLabel(provider: ProviderKind): string {
+  switch (provider) {
+    case "anthropic":
+      return "claude";
+    case "cursor":
+      return "cursor";
+    case "mock":
+      return "mock";
+  }
+}
+
+function choiceMatchesQuery(choice: ModelChoice, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const haystack = [
+    choice.label,
+    choice.modelId,
+    choice.provider,
+    providerSourceLabel(choice.provider),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(q);
+}
+
+function buildDisplayRows(filtered: ModelChoice[]): DisplayRow[] {
+  const rows: DisplayRow[] = [];
+  let choiceIndex = 0;
+
+  for (const provider of PROVIDER_ORDER) {
+    const group = filtered.filter((c) => c.provider === provider);
+    if (group.length === 0) continue;
+    rows.push({
+      kind: "header",
+      provider,
+      label: PROVIDER_HEADERS[provider],
+    });
+    for (const choice of group) {
+      rows.push({ kind: "choice", choice, choiceIndex });
+      choiceIndex += 1;
+    }
+  }
+
+  return rows;
+}
+
+function firstChoiceRowIndex(rows: DisplayRow[]): number {
+  const idx = rows.findIndex((r) => r.kind === "choice");
+  return idx >= 0 ? idx : 0;
+}
+
+function nextChoiceRowIndex(
+  rows: DisplayRow[],
+  from: number,
+  direction: 1 | -1,
+): number {
+  let i = from + direction;
+  while (i >= 0 && i < rows.length) {
+    if (rows[i]?.kind === "choice") return i;
+    i += direction;
+  }
+  return from;
+}
+
+function snapToChoiceRow(rows: DisplayRow[], index: number): number {
+  const row = rows[index];
+  if (row?.kind === "choice") return index;
+  const forward = nextChoiceRowIndex(rows, index - 1, 1);
+  if (rows[forward]?.kind === "choice") return forward;
+  return nextChoiceRowIndex(rows, index + 1, -1);
+}
+
+export function ModelSelect({
+  mode,
+  choices,
+  value,
+  includeMocks,
+  onChange,
+  onSubmit,
+  onToggleIncludeMocks,
+}: ModelSelectProps) {
   const { width: columns, height: rows } = useTerminalDimensions();
 
-  const [section, setSection] = useState<Section>("proposers");
   const [cursor, setCursor] = useState(0);
   const [scrollStart, setScrollStart] = useState(0);
-  const [proposers, setProposers] = useState<ModelPick[]>(() => [
-    ...initial.proposers,
-  ]);
-  const [consensus, setConsensus] = useState<ModelPick>(() => ({
-    ...initial.consensus,
-  }));
+  const [continueFocused, setContinueFocused] = useState(false);
+  const [filterQuery, setFilterQuery] = useState("");
+  /** When true, filter `<input>` is focused — `m`/`c` shortcuts are disabled. */
+  const [filtering, setFiltering] = useState(false);
+
+  const proposers = value.proposers;
+  const consensus = value.consensus;
 
   const proposerKeys = useMemo(
     () => new Set(proposers.map(pickKey)),
     [proposers],
   );
 
+  const filteredChoices = useMemo(
+    () => choices.filter((c) => choiceMatchesQuery(c, filterQuery)),
+    [choices, filterQuery],
+  );
+
+  const displayRows = useMemo(
+    () => buildDisplayRows(filteredChoices),
+    [filteredChoices],
+  );
+
   const canContinue = proposers.length > 0 && Boolean(consensus);
-  const maxIndex = Math.max(0, choices.length - 1);
+  const maxIndex = Math.max(0, displayRows.length - 1);
   const rowWidth = Math.max(20, columns - 4);
 
-  // Header + tab bar + title/help + section chrome + continue/hints + padding
-  const listHeight = Math.max(5, rows - 18);
+  // Header + tab bar + title/help + filter + continue/hints + padding
+  const listHeight = Math.max(5, rows - 16);
 
   useEffect(() => {
-    if (section === "continue") return;
-    const { start } = visibleWindow(cursor, choices.length, listHeight);
+    setCursor(firstChoiceRowIndex(displayRows));
+    setContinueFocused(false);
+  }, [mode]);
+
+  useEffect(() => {
+    setCursor(firstChoiceRowIndex(displayRows));
+    setContinueFocused(false);
+  }, [filterQuery]);
+
+  useEffect(() => {
+    setCursor((prev) => {
+      if (displayRows.length === 0) return 0;
+      if (displayRows[prev]?.kind === "choice") return prev;
+      return firstChoiceRowIndex(displayRows);
+    });
+  }, [choices]);
+
+  useEffect(() => {
+    if (continueFocused) return;
+    if (displayRows.length === 0) {
+      setScrollStart(0);
+      return;
+    }
+    const { start } = visibleWindow(cursor, displayRows.length, listHeight);
     setScrollStart(start);
-  }, [cursor, section, choices.length, listHeight]);
+  }, [cursor, continueFocused, displayRows.length, listHeight]);
 
-  const windowEnd = Math.min(choices.length, scrollStart + listHeight);
-  const visibleChoices = choices.slice(scrollStart, windowEnd);
+  const windowEnd = Math.min(displayRows.length, scrollStart + listHeight);
+  const visibleRows = displayRows.slice(scrollStart, windowEnd);
 
-  const activateRow = (target: "proposers" | "consensus", index: number) => {
-    const choice = choices[index];
-    if (!choice) return;
+  const activateChoice = (choice: ModelChoice, rowIndex: number) => {
     const pick: ModelPick = {
       provider: choice.provider,
       modelId: choice.modelId,
     };
 
-    if (target === "proposers") {
-      setSection("proposers");
-      setCursor(index);
-      setProposers((prev) => {
-        const key = pickKey(pick);
-        if (prev.some((p) => pickKey(p) === key)) {
-          return prev.filter((p) => pickKey(p) !== key);
-        }
-        return [...prev, pick];
-      });
+    setContinueFocused(false);
+    setCursor(rowIndex);
+
+    if (mode === "proposers") {
+      const key = pickKey(pick);
+      const nextProposers = proposers.some((p) => pickKey(p) === key)
+        ? proposers.filter((p) => pickKey(p) !== key)
+        : [...proposers, pick];
+      onChange({ proposers: nextProposers, consensus });
       return;
     }
 
-    setSection("consensus");
-    setCursor(index);
-    setConsensus(pick);
+    onChange({ proposers, consensus: pick });
+  };
+
+  const activateRow = (index: number) => {
+    const row = displayRows[index];
+    if (!row || row.kind !== "choice") return;
+    activateChoice(row.choice, index);
   };
 
   const submit = () => {
     if (!canContinue) return;
-    onSubmit({ proposers, consensus });
-  };
-
-  const cycleSection = (dir: 1 | -1) => {
-    const order: Section[] = ["proposers", "consensus", "continue"];
-    const idx = order.indexOf(section);
-    const next = order[(idx + dir + order.length) % order.length]!;
-    setSection(next);
-    if (next !== "continue") {
-      setCursor((prev) => clamp(prev, 0, maxIndex));
-    }
+    onSubmit(value);
   };
 
   useKeyboard((key) => {
-    if (key.name === "tab") {
-      cycleSection(key.shift ? -1 : 1);
+    if (key.name === "escape") {
+      if (filterQuery) {
+        setFilterQuery("");
+        return;
+      }
+      if (filtering) {
+        setFiltering(false);
+        return;
+      }
+    }
+
+    // `/` enters filter mode (also when already filtering, keep focus)
+    if (
+      !filtering &&
+      !key.ctrl &&
+      !key.meta &&
+      (key.raw === "/" || key.sequence === "/" || key.name === "/")
+    ) {
+      setFiltering(true);
+      setContinueFocused(false);
       return;
     }
 
-    if (section === "continue") {
-      if (key.name === "return" || key.name === "c" || key.name === "space") {
+    // Shortcuts that conflict with typing — only when not filtering
+    if (!filtering) {
+      if (key.name === "m" && !key.ctrl && !key.meta) {
+        onToggleIncludeMocks();
+        return;
+      }
+      if (key.name === "c" && !key.ctrl && !key.meta) {
+        submit();
+        return;
+      }
+    }
+
+    if (continueFocused) {
+      if (key.name === "up") {
+        setContinueFocused(false);
+        setCursor(snapToChoiceRow(displayRows, maxIndex));
+        return;
+      }
+      if (key.name === "return" || key.name === "space") {
         submit();
       }
       return;
     }
 
     if (key.name === "pageup") {
-      setCursor((prev) => Math.max(0, prev - listHeight));
+      setCursor((prev) =>
+        snapToChoiceRow(displayRows, Math.max(0, prev - listHeight)),
+      );
       return;
     }
     if (key.name === "pagedown") {
-      setCursor((prev) => Math.min(maxIndex, prev + listHeight));
+      setCursor((prev) =>
+        snapToChoiceRow(displayRows, Math.min(maxIndex, prev + listHeight)),
+      );
       return;
     }
     if (key.name === "up") {
-      setCursor((prev) => Math.max(0, prev - 1));
+      setCursor((prev) => nextChoiceRowIndex(displayRows, prev, -1));
       return;
     }
     if (key.name === "down") {
-      setCursor((prev) => Math.min(maxIndex, prev + 1));
+      const next = nextChoiceRowIndex(displayRows, cursor, 1);
+      if (next === cursor && canContinue) {
+        setFiltering(false);
+        setContinueFocused(true);
+        return;
+      }
+      setCursor(next);
       return;
     }
 
     if (key.name === "space" || key.name === "return") {
-      activateRow(section, cursor);
-      return;
-    }
-
-    if (key.name === "c") {
-      submit();
+      if (filtering) return;
+      activateRow(cursor);
     }
   });
 
-  const consensusLabel =
-    choices.find(
-      (c) =>
-        c.provider === consensus.provider && c.modelId === consensus.modelId,
-    )?.label ?? `${consensus.provider}:${consensus.modelId}`;
+  const consensusChoice = choices.find(
+    (c) =>
+      c.provider === consensus.provider && c.modelId === consensus.modelId,
+  );
+  const consensusLabel = consensusChoice
+    ? formatChoiceLabel(consensusChoice)
+    : `${consensus.provider}:${consensus.modelId}`;
 
   const scrollHint =
-    choices.length > listHeight
-      ? ` · showing ${scrollStart + 1}–${windowEnd} of ${choices.length}`
+    displayRows.length > listHeight
+      ? ` · showing ${scrollStart + 1}–${windowEnd} of ${displayRows.length}`
       : "";
+
+  const title =
+    mode === "proposers"
+      ? `Proposers (${proposers.length} selected)${scrollHint}`
+      : `Consensus (${consensusLabel})${scrollHint}`;
+
+  const help =
+    mode === "proposers"
+      ? "Multi-select — Space/click to toggle"
+      : "Single-select — Space/click to choose";
+
+  const mocksHint = includeMocks ? "mocks on" : "mocks off";
 
   return (
     <box flexDirection="column" gap={1} flexGrow={1} width={rowWidth}>
       <box flexDirection="column">
         <text>
-          <strong>{fitRow("Select models", rowWidth)}</strong>
+          <strong>{fitRow(title, rowWidth)}</strong>
         </text>
-        <text fg={DIM}>
-          {fitRow(
-            section === "proposers"
-              ? "Proposers (multi) — Space/click to toggle"
-              : section === "consensus"
-                ? "Consensus (single) — Space/click to choose"
-                : "Ready to continue",
-            rowWidth,
-          )}
-        </text>
+        <text fg={DIM}>{fitRow(help, rowWidth)}</text>
       </box>
 
-      <box flexDirection="column">
-        <text fg={section === "proposers" ? "cyan" : DIM}>
-          <strong>
-            {fitRow(
-              `Proposers  (${proposers.length} selected)${section === "proposers" ? scrollHint : ""}`,
-              rowWidth,
-            )}
-          </strong>
-        </text>
-        {section !== "proposers" ? (
-          <Clickable
-            onClick={() => {
-              setSection("proposers");
-              setCursor(0);
-            }}
-          >
-            <text fg={DIM}>
-              {fitRow(
-                proposers.length === 0
-                  ? "  (none — click/Tab to edit)"
-                  : `  ${proposers.length} model(s) selected · click/Tab to edit`,
-                rowWidth,
-              )}
-            </text>
-          </Clickable>
+      <box flexDirection="row" gap={0} width={rowWidth}>
+        <text fg={DIM}>{"/ "}</text>
+        {filtering ? (
+          <input
+            focused
+            flexGrow={1}
+            value={filterQuery}
+            onInput={setFilterQuery}
+            placeholder="filter models…"
+          />
         ) : (
-          visibleChoices.map((choice, offset) => {
-            const index = scrollStart + offset;
-            const key = pickKey(choice);
-            const selected = proposerKeys.has(key);
-            const focused = cursor === index;
-            const mark = selected ? "[x]" : "[ ]";
-            const pointer = focused ? ">" : " ";
-            const line = fitRow(
-              `${pointer} ${mark} ${formatChoiceLabel(choice)}`,
-              rowWidth,
-            );
-            return (
-              <Clickable
-                key={`p-${key}`}
-                onClick={() => activateRow("proposers", index)}
-              >
-                <text
-                  fg={focused ? "black" : selected ? "green" : undefined}
-                  bg={focused ? "cyan" : undefined}
-                  truncate
-                >
-                  {line}
-                </text>
-              </Clickable>
-            );
-          })
+          <text fg={filterQuery ? undefined : DIM} truncate>
+            {filterQuery || "press / to filter"}
+          </text>
         )}
       </box>
 
       <box flexDirection="column">
-        <text fg={section === "consensus" ? "cyan" : DIM}>
-          <strong>
-            {fitRow(
-              `Consensus  (${consensusLabel})${section === "consensus" ? scrollHint : ""}`,
-              rowWidth,
-            )}
-          </strong>
-        </text>
-        {section !== "consensus" ? (
-          <Clickable
-            onClick={() => {
-              setSection("consensus");
-              setCursor(0);
-            }}
-          >
-            <text fg={DIM}>
-              {fitRow(`  ${consensusLabel} · click/Tab to edit`, rowWidth)}
-            </text>
-          </Clickable>
+        {visibleRows.length === 0 ? (
+          <text fg={DIM}>{fitRow("(no matches)", rowWidth)}</text>
         ) : (
-          visibleChoices.map((choice, offset) => {
+          visibleRows.map((row, offset) => {
             const index = scrollStart + offset;
+            if (row.kind === "header") {
+              return (
+                <text key={`header-${row.provider}`} fg={DIM} truncate>
+                  {fitRow(`  ── ${row.label} ──`, rowWidth)}
+                </text>
+              );
+            }
+
+            const { choice } = row;
             const key = pickKey(choice);
-            const selected = pickKey(consensus) === key;
-            const focused = cursor === index;
-            const mark = selected ? "(•)" : "( )";
+            const focused = !continueFocused && cursor === index;
+            const selected =
+              mode === "proposers"
+                ? proposerKeys.has(key)
+                : pickKey(consensus) === key;
+            const mark =
+              mode === "proposers"
+                ? selected
+                  ? "[x]"
+                  : "[ ]"
+                : selected
+                  ? "(•)"
+                  : "( )";
             const pointer = focused ? ">" : " ";
             const line = fitRow(
               `${pointer} ${mark} ${formatChoiceLabel(choice)}`,
@@ -277,8 +407,8 @@ export function ModelSelect({ choices, initial, onSubmit }: ModelSelectProps) {
             );
             return (
               <Clickable
-                key={`c-${key}`}
-                onClick={() => activateRow("consensus", index)}
+                key={`${mode}-${key}`}
+                onClick={() => activateChoice(choice, index)}
               >
                 <text
                   fg={focused ? "black" : selected ? "green" : undefined}
@@ -295,25 +425,24 @@ export function ModelSelect({ choices, initial, onSubmit }: ModelSelectProps) {
 
       <Clickable
         onClick={() => {
-          setSection("continue");
+          setFiltering(false);
+          setContinueFocused(true);
           submit();
         }}
       >
         <text
-          fg={
-            !canContinue
-              ? DIM
-              : section === "continue"
-                ? "black"
-                : undefined
-          }
-          bg={section === "continue" ? "cyan" : undefined}
+          fg={!canContinue ? DIM : continueFocused ? "black" : undefined}
+          bg={continueFocused ? "cyan" : undefined}
           truncate
         >
           <strong>
             {fitRow(
-              `${section === "continue" ? ">" : " "} [ Continue ]${
-                canContinue ? "" : " (select ≥1 proposer)"
+              `${continueFocused ? ">" : " "} [ Continue ]${
+                canContinue
+                  ? ""
+                  : proposers.length === 0
+                    ? " (select ≥1 proposer)"
+                    : " (pick consensus)"
               }`,
               rowWidth,
             )}
@@ -323,7 +452,7 @@ export function ModelSelect({ choices, initial, onSubmit }: ModelSelectProps) {
 
       <text fg={DIM}>
         {fitRow(
-          "↑↓/PgUp/PgDn scroll · Space toggle · Tab section · c continue",
+          `↑↓ scroll · / filter · m ${mocksHint} · Esc clear · c continue`,
           rowWidth,
         )}
       </text>
