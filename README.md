@@ -27,7 +27,14 @@ uv run python -m planner_ai
 
 ### Install as a tool (any project)
 
-From the `planner-ai/` package directory (or a published package once available):
+From PyPI:
+
+```bash
+uv tool install planner-ai
+# or: pip install planner-ai
+```
+
+From this package directory (development):
 
 ```bash
 uv tool install .
@@ -40,7 +47,7 @@ cd ~/code/my-app
 planner
 ```
 
-Both the Bun and Python CLIs expose the same console name `planner`. If both are on your `PATH`, whichever comes first wins. Prefer one install at a time, or call the Python app explicitly with `uv run --directory /path/to/planner-ai/planner-ai planner`.
+Both the Bun and Python CLIs expose the same console name `planner`. If both are on your `PATH`, whichever comes first wins. Prefer one install at a time, or call the Python app explicitly with `uv run --directory /path/to/planner-ai planner`.
 
 ## Auth / tokens
 
