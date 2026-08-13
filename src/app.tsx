@@ -40,8 +40,25 @@ function formatSources(sources: {
   return `proposers: ${proposers} · consensus: ${sources.consensus}`;
 }
 
+function hasAnyRealCredential(creds: AppConfig): boolean {
+  return Boolean(
+    creds.claudeCodeOAuthToken || creds.cursorApiKey || creds.codexApiKey,
+  );
+}
+
+function credentialLabel(key: ConfigCredentialKey): string {
+  switch (key) {
+    case "claudeCodeOAuthToken":
+      return "Claude OAuth token";
+    case "cursorApiKey":
+      return "Cursor API key";
+    case "codexApiKey":
+      return "Codex API key";
+  }
+}
+
 function startupTab(creds: AppConfig, choices: ModelChoice[]): AppTab {
-  if (!creds.claudeCodeOAuthToken || !creds.cursorApiKey) {
+  if (!hasAnyRealCredential(creds)) {
     return "auth";
   }
   if (!normalizeSelection(creds.modelSelection, choices)) {
@@ -166,6 +183,20 @@ export function App() {
     async (token: string) => {
       try {
         const next = await saveConfig({ cursorApiKey: token });
+        await reloadModels(next, "auth");
+      } catch (err) {
+        setPhase("error");
+        setError(err instanceof Error ? err.message : String(err));
+        goTab("plan");
+      }
+    },
+    [reloadModels, goTab],
+  );
+
+  const onSaveCodex = useCallback(
+    async (token: string) => {
+      try {
+        const next = await saveConfig({ codexApiKey: token });
         await reloadModels(next, "auth");
       } catch (err) {
         setPhase("error");
@@ -318,14 +349,12 @@ export function App() {
   });
 
   const failingLabels = useMemo(() => {
-    return failingKeys.map((key) =>
-      key === "claudeCodeOAuthToken" ? "Claude OAuth token" : "Cursor API key",
-    );
+    return failingKeys.map(credentialLabel);
   }, [failingKeys]);
 
   const planGate: PlanGate = providers
     ? "ready"
-    : !config.claudeCodeOAuthToken && !config.cursorApiKey
+    : !hasAnyRealCredential(config)
       ? "need-auth"
       : "need-models";
 
@@ -435,6 +464,9 @@ export function App() {
             }}
             onSaveCursor={(token) => {
               void onSaveCursor(token);
+            }}
+            onSaveCodex={(token) => {
+              void onSaveCodex(token);
             }}
             onClear={(keys) => {
               void onClearCredentials(keys);

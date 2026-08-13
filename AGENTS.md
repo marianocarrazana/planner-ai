@@ -8,7 +8,7 @@ Terminal UI (OpenTUI + React) that asks several models for a plan in parallel, r
 
 - Runtime: Bun ≥ 1.2 (`type: "module"`)
 - UI: `@opentui/core` + `@opentui/react` (JSX import source is `@opentui/react`, not `react`)
-- Providers: Anthropic Claude Agent SDK, Cursor SDK, plus mock fallbacks
+- Providers: Anthropic Claude Agent SDK, Cursor SDK, OpenAI Codex SDK, plus mock fallbacks
 - Language: TypeScript strict; ESM imports use `.js` extensions (`./foo.js`)
 
 ## Commands
@@ -35,7 +35,7 @@ src/
   writeRunArchive.ts   # archives run under .planner-ai/
   components/          # TUI screens/widgets
   pipeline/            # runPipeline + types
-  providers/           # anthropic, cursor, mock, models, prompts, resolve
+  providers/           # anthropic, cursor, codex, mock, models, prompts, resolve
 ```
 
 ## Conventions

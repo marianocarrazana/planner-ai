@@ -6,12 +6,16 @@ import type { ModelSelection, ProviderKind } from "./providers/models.js";
 export interface AppConfig {
   claudeCodeOAuthToken?: string;
   cursorApiKey?: string;
+  codexApiKey?: string;
   modelSelection?: ModelSelection;
   /** When true, show mock models even if real credentials are set. */
   includeMocks?: boolean;
 }
 
-export type ConfigCredentialKey = "claudeCodeOAuthToken" | "cursorApiKey";
+export type ConfigCredentialKey =
+  | "claudeCodeOAuthToken"
+  | "cursorApiKey"
+  | "codexApiKey";
 
 const APP_NAME = "planner-ai";
 const CONFIG_FILENAME = "config.json";
@@ -52,7 +56,12 @@ function fieldNeedsRewrite(raw: unknown): boolean {
 }
 
 function isProviderKind(value: unknown): value is ProviderKind {
-  return value === "anthropic" || value === "cursor" || value === "mock";
+  return (
+    value === "anthropic" ||
+    value === "cursor" ||
+    value === "codex" ||
+    value === "mock"
+  );
 }
 
 function normalizeModelSelection(raw: unknown): ModelSelection | undefined {
@@ -114,6 +123,11 @@ function normalizeConfig(raw: unknown): AppConfig {
     if (value) config.cursorApiKey = value;
   }
 
+  if (typeof obj.codexApiKey === "string") {
+    const value = sanitizeToken(obj.codexApiKey);
+    if (value) config.codexApiKey = value;
+  }
+
   const modelSelection = normalizeModelSelection(obj.modelSelection);
   if (modelSelection) {
     config.modelSelection = modelSelection;
@@ -147,7 +161,8 @@ export async function loadConfig(): Promise<AppConfig> {
       (fieldNeedsRewrite(
         (parsed as Record<string, unknown>).claudeCodeOAuthToken,
       ) ||
-        fieldNeedsRewrite((parsed as Record<string, unknown>).cursorApiKey))
+        fieldNeedsRewrite((parsed as Record<string, unknown>).cursorApiKey) ||
+        fieldNeedsRewrite((parsed as Record<string, unknown>).codexApiKey))
     ) {
       await writeConfigFile(normalized);
     }
@@ -185,6 +200,15 @@ export async function saveConfig(partial: AppConfig): Promise<AppConfig> {
       next.cursorApiKey = value;
     } else {
       delete next.cursorApiKey;
+    }
+  }
+
+  if (partial.codexApiKey !== undefined) {
+    const value = sanitizeToken(partial.codexApiKey);
+    if (value) {
+      next.codexApiKey = value;
+    } else {
+      delete next.codexApiKey;
     }
   }
 

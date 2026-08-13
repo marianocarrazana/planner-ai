@@ -4,16 +4,23 @@ import type { AppConfig, ConfigCredentialKey } from "../config.js";
 import { Clickable } from "./Clickable.js";
 import { TokenInput } from "./TokenInput.js";
 
-type AuthMode = "overview" | "claude" | "cursor";
+type AuthMode = "overview" | "claude" | "cursor" | "codex";
 
 interface AuthScreenProps {
   config: AppConfig;
   onSaveClaude: (token: string) => void;
   onSaveCursor: (token: string) => void;
+  onSaveCodex: (token: string) => void;
   onClear: (keys: ConfigCredentialKey[]) => void;
 }
 
 const DIM = "#888888";
+
+const ALL_CREDENTIAL_KEYS: ConfigCredentialKey[] = [
+  "claudeCodeOAuthToken",
+  "cursorApiKey",
+  "codexApiKey",
+];
 
 function statusLine(label: string, set: boolean): string {
   return `${label}: ${set ? "set" : "missing"}`;
@@ -23,6 +30,7 @@ export function AuthScreen({
   config,
   onSaveClaude,
   onSaveCursor,
+  onSaveCodex,
   onClear,
 }: AuthScreenProps) {
   const [mode, setMode] = useState<AuthMode>("overview");
@@ -30,6 +38,8 @@ export function AuthScreen({
 
   const hasClaude = Boolean(config.claudeCodeOAuthToken);
   const hasCursor = Boolean(config.cursorApiKey);
+  const hasCodex = Boolean(config.codexApiKey);
+  const hasAny = hasClaude || hasCursor || hasCodex;
 
   const overviewActions = [
     {
@@ -41,6 +51,11 @@ export function AuthScreen({
       id: "edit-cursor",
       label: hasCursor ? "Edit Cursor API key" : "Set Cursor API key",
       run: () => setMode("cursor"),
+    },
+    {
+      id: "edit-codex",
+      label: hasCodex ? "Edit Codex API key" : "Set Codex API key",
+      run: () => setMode("codex"),
     },
     {
       id: "clear-claude",
@@ -55,10 +70,16 @@ export function AuthScreen({
       run: () => onClear(["cursorApiKey"]),
     },
     {
-      id: "clear-both",
-      label: "Clear both credentials",
-      disabled: !hasClaude && !hasCursor,
-      run: () => onClear(["claudeCodeOAuthToken", "cursorApiKey"]),
+      id: "clear-codex",
+      label: "Clear Codex key",
+      disabled: !hasCodex,
+      run: () => onClear(["codexApiKey"]),
+    },
+    {
+      id: "clear-all",
+      label: "Clear all credentials",
+      disabled: !hasAny,
+      run: () => onClear(ALL_CREDENTIAL_KEYS),
     },
   ] as const;
 
@@ -119,6 +140,24 @@ export function AuthScreen({
     );
   }
 
+  if (mode === "codex") {
+    return (
+      <box flexDirection="column" gap={1}>
+        <TokenInput
+          label="Codex API key"
+          hint="From platform.openai.com/api-keys. Enter empty to cancel."
+          onSubmit={(value) => {
+            if (value) onSaveCodex(value);
+            setMode("overview");
+          }}
+        />
+        <Clickable onClick={() => setMode("overview")}>
+          <text fg={DIM}>← Back to Auth overview</text>
+        </Clickable>
+      </box>
+    );
+  }
+
   return (
     <box flexDirection="column" gap={1}>
       <text>
@@ -130,6 +169,9 @@ export function AuthScreen({
       </text>
       <text fg={hasCursor ? "green" : "yellow"}>
         {statusLine("Cursor API key", hasCursor)}
+      </text>
+      <text fg={hasCodex ? "green" : "yellow"}>
+        {statusLine("Codex API key", hasCodex)}
       </text>
 
       <box flexDirection="column" gap={0}>

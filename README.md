@@ -17,10 +17,11 @@ Requires [Bun](https://bun.sh) ≥ 1.2.
 bun install
 ```
 
-On first run the TUI asks for tokens only when they are missing from your local config (Enter skips a provider):
+On first run the TUI asks for tokens when none are stored (set at least one real provider; Enter skips a field):
 
 - **Claude Code OAuth token** — run `claude setup-token`, then paste (Team / Pro / Max subscription)
 - **Cursor API key** — from [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations)
+- **Codex API key** — from [OpenAI API keys](https://platform.openai.com/api-keys) (used as `CODEX_API_KEY`)
 
 Tokens are saved under the OS user config directory:
 
@@ -28,9 +29,9 @@ Tokens are saved under the OS user config directory:
 - Linux: `~/.config/planner-ai/config.json` (or `$XDG_CONFIG_HOME/planner-ai`)
 - Windows: `%APPDATA%\planner-ai\config.json`
 
-Skipped providers are omitted; if both are skipped, mock providers are used.
+Providers without a key are omitted; if none are set, mock providers are used.
 
-If a stored key fails auth during a run, the error screen offers **`r`** to remove that key from config and re-enter it (or **`q`** to quit). To clear both credentials without running the TUI:
+If a stored key fails auth during a run, the error screen offers **`r`** to remove that key from config and re-enter it (or **`q`** to quit). To clear all credentials without running the TUI:
 
 ```bash
 bun start -- --reset-auth
@@ -62,17 +63,18 @@ planner-ai
 
 ## TUI
 
-Fullscreen alternate-screen UI with three tabs:
+Fullscreen alternate-screen UI with tabs:
 
 | Tab | Shortcut | What it does |
 | --- | --- | --- |
 | **Plan** | `Ctrl+1` | Enter a goal, watch proposals / consensus, see `plan.md` |
-| **Models** | `Ctrl+2` | Pick proposers (multi) and consensus (single) — click or keyboard |
-| **Auth** | `Ctrl+3` | Set or clear Claude OAuth / Cursor API key |
+| **Proposers** | `Ctrl+2` | Pick proposer models (multi) — Claude / Cursor / Codex / Mock |
+| **Consensus** | `Ctrl+3` | Pick the consensus model (single) |
+| **Auth** | `Ctrl+4` | Set or clear Claude OAuth / Cursor / Codex API keys |
 
-You can also click the tab labels. On Models: click a row or use `↑↓` / `PgUp`/`PgDn`, `Space` toggle/choose, `Tab` switches proposers ↔ consensus ↔ Continue, `c` continues to Plan.
+You can also click the tab labels. On Models: click a row or use `↑↓` / `PgUp`/`PgDn`, `Space` toggle/choose, `/` filter, `m` toggle mocks, `c` continues to Plan.
 
-Startup opens **Auth** if either credential is missing, else **Models** if there is no saved selection, else **Plan**.
+Startup opens **Auth** if no real credential is set, else **Proposers** if there is no saved selection, else **Plan**.
 
 ## How it works
 

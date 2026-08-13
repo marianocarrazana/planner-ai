@@ -23,11 +23,12 @@ interface ModelSelectProps {
 
 const DIM = "#888888";
 
-const PROVIDER_ORDER: ProviderKind[] = ["anthropic", "cursor", "mock"];
+const PROVIDER_ORDER: ProviderKind[] = ["anthropic", "cursor", "codex", "mock"];
 
 const PROVIDER_HEADERS: Record<ProviderKind, string> = {
   anthropic: "Claude",
   cursor: "Cursor",
+  codex: "Codex",
   mock: "Mock",
 };
 
@@ -67,6 +68,8 @@ function providerSourceLabel(provider: ProviderKind): string {
       return "claude";
     case "cursor":
       return "cursor";
+    case "codex":
+      return "codex";
     case "mock":
       return "mock";
   }

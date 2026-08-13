@@ -6,7 +6,11 @@ import { clearCredentials, getConfigPath } from "./config.js";
 
 async function main(): Promise<void> {
   if (process.argv.includes("--reset-auth")) {
-    await clearCredentials(["claudeCodeOAuthToken", "cursorApiKey"]);
+    await clearCredentials([
+      "claudeCodeOAuthToken",
+      "cursorApiKey",
+      "codexApiKey",
+    ]);
     console.log(`Cleared credentials in ${getConfigPath()}`);
     return;
   }

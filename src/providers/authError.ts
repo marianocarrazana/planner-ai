@@ -7,7 +7,7 @@ const AUTH_ERROR_PATTERNS = [
   /\b401\b/,
   /invalid authorization/i,
   /invalid api key/i,
-  /invalid token/i,
+  /expired token/i,
   /authentication/i,
   /fix external auth/i,
 ];
@@ -25,6 +25,8 @@ export function credentialKeyForProvider(
       return "claudeCodeOAuthToken";
     case "cursor":
       return "cursorApiKey";
+    case "codex":
+      return "codexApiKey";
     default:
       return null;
   }
@@ -57,6 +59,9 @@ export function collectFailingCredentialKeys(input: {
       }
       if (/cursor/i.test(input.errorMessage)) {
         keys.add("cursorApiKey");
+      }
+      if (/codex|openai|CODEX_API_KEY/i.test(input.errorMessage)) {
+        keys.add("codexApiKey");
       }
     }
   }

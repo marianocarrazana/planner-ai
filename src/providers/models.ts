@@ -1,6 +1,6 @@
 import { Cursor } from "@cursor/sdk";
 
-export type ProviderKind = "anthropic" | "cursor" | "mock";
+export type ProviderKind = "anthropic" | "cursor" | "codex" | "mock";
 
 export interface ModelChoice {
   provider: ProviderKind;
@@ -21,6 +21,7 @@ export interface ModelSelection {
 export interface ProviderCredentialsForModels {
   claudeCodeOAuthToken?: string;
   cursorApiKey?: string;
+  codexApiKey?: string;
 }
 
 const CURSOR_FALLBACK_MODELS: ModelChoice[] = [
@@ -34,6 +35,14 @@ const CURSOR_FALLBACK_MODELS: ModelChoice[] = [
     modelId: "auto",
     label: "Cursor Auto",
   },
+];
+
+const CODEX_FALLBACK_MODELS: ModelChoice[] = [
+  { provider: "codex", modelId: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
+  { provider: "codex", modelId: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
+  { provider: "codex", modelId: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
+  { provider: "codex", modelId: "gpt-5.5", label: "GPT-5.5" },
+  { provider: "codex", modelId: "gpt-5.2", label: "GPT-5.2" },
 ];
 
 const MOCK_MODELS: ModelChoice[] = [
@@ -57,9 +66,15 @@ function sourceLabel(provider: ProviderKind): string {
       return "claude";
     case "cursor":
       return "cursor";
+    case "codex":
+      return "codex";
     case "mock":
       return "mock";
   }
+}
+
+export function loadCodexChoices(): ModelChoice[] {
+  return CODEX_FALLBACK_MODELS;
 }
 
 export function formatChoiceLabel(choice: ModelChoice): string {
@@ -191,6 +206,7 @@ export async function availableChoices(
 ): Promise<ModelChoice[]> {
   const claudeToken = nonEmpty(creds.claudeCodeOAuthToken);
   const cursorKey = nonEmpty(creds.cursorApiKey);
+  const codexKey = nonEmpty(creds.codexApiKey);
   const choices: ModelChoice[] = [];
 
   if (claudeToken) {
@@ -201,8 +217,12 @@ export async function availableChoices(
     choices.push(...(await loadCursorChoices(cursorKey)));
   }
 
+  if (codexKey) {
+    choices.push(...loadCodexChoices());
+  }
+
   const showMocks =
-    opts?.includeMocks === true || (!claudeToken && !cursorKey);
+    opts?.includeMocks === true || (!claudeToken && !cursorKey && !codexKey);
   if (showMocks) {
     choices.push(...MOCK_MODELS);
   }
@@ -215,6 +235,7 @@ export function defaultSelection(
 ): ModelSelection | null {
   const anthropic = choices.filter((c) => c.provider === "anthropic");
   const cursor = choices.filter((c) => c.provider === "cursor");
+  const codex = choices.filter((c) => c.provider === "codex");
   const mock = choices.filter((c) => c.provider === "mock");
 
   const proposers: ModelPick[] = [];
@@ -229,6 +250,12 @@ export function defaultSelection(
     proposers.push({
       provider: cursor[0].provider,
       modelId: cursor[0].modelId,
+    });
+  }
+  if (codex[0]) {
+    proposers.push({
+      provider: codex[0].provider,
+      modelId: codex[0].modelId,
     });
   }
   if (proposers.length === 0 && mock[0]) {
@@ -252,6 +279,11 @@ export function defaultSelection(
     consensus = {
       provider: cursor[0].provider,
       modelId: cursor[0].modelId,
+    };
+  } else if (codex[0]) {
+    consensus = {
+      provider: codex[0].provider,
+      modelId: codex[0].modelId,
     };
   } else {
     consensus = {
@@ -300,6 +332,7 @@ function normalizePick(raw: unknown): ModelPick | null {
   if (
     provider !== "anthropic" &&
     provider !== "cursor" &&
+    provider !== "codex" &&
     provider !== "mock"
   ) {
     return null;

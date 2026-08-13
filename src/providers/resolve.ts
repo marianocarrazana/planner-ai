@@ -3,6 +3,10 @@ import {
   createAnthropicProposer,
 } from "./anthropic.js";
 import {
+  createCodexConsensus,
+  createCodexProposer,
+} from "./codex.js";
+import {
   createCursorConsensus,
   createCursorProposer,
 } from "./cursor.js";
@@ -20,6 +24,7 @@ export type { ProviderKind };
 export interface ProviderCredentials {
   claudeCodeOAuthToken?: string;
   cursorApiKey?: string;
+  codexApiKey?: string;
 }
 
 export interface ResolvedProviders {
@@ -46,6 +51,9 @@ function requireCreds(
   if (provider === "cursor" && !nonEmpty(creds.cursorApiKey)) {
     throw new Error("Selected Cursor model but Cursor API key is missing");
   }
+  if (provider === "codex" && !nonEmpty(creds.codexApiKey)) {
+    throw new Error("Selected Codex model but Codex API key is missing");
+  }
 }
 
 function createProposer(
@@ -68,6 +76,14 @@ function createProposer(
   if (pick.provider === "cursor") {
     return createCursorProposer(
       nonEmpty(creds.cursorApiKey)!,
+      pick.modelId,
+      label,
+    );
+  }
+
+  if (pick.provider === "codex") {
+    return createCodexProposer(
+      nonEmpty(creds.codexApiKey)!,
       pick.modelId,
       label,
     );
@@ -100,6 +116,13 @@ function createConsensus(
   if (pick.provider === "cursor") {
     return createCursorConsensus(
       nonEmpty(creds.cursorApiKey)!,
+      pick.modelId,
+    );
+  }
+
+  if (pick.provider === "codex") {
+    return createCodexConsensus(
+      nonEmpty(creds.codexApiKey)!,
       pick.modelId,
     );
   }
