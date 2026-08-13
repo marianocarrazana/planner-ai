@@ -2,6 +2,7 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppTabs, type AppTab } from "./components/AppTabs.js";
 import { AuthScreen } from "./components/AuthScreen.js";
+import { HistoryScreen } from "./components/HistoryScreen.js";
 import { ModelSelect } from "./components/ModelSelect.js";
 import { PlanScreen, type PlanGate } from "./components/PlanScreen.js";
 import {
@@ -345,6 +346,10 @@ export function App() {
     }
     if (key.name === "4") {
       goTab("auth");
+      return;
+    }
+    if (key.name === "5") {
+      goTab("history");
     }
   });
 
@@ -382,7 +387,7 @@ export function App() {
         {goal ? <text fg={DIM}>Goal: {goal}</text> : null}
         <text fg={DIM}>
           Tabs: click or Ctrl+1 Plan · Ctrl+2 Proposers · Ctrl+3 Consensus ·
-          Ctrl+4 Auth
+          Ctrl+4 Auth · Ctrl+5 History
         </text>
       </box>
 
@@ -473,6 +478,8 @@ export function App() {
             }}
           />
         ) : null}
+
+        {!loadingConfig && activeTab === "history" ? <HistoryScreen /> : null}
       </box>
     </box>
   );

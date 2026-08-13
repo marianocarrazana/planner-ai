@@ -33,6 +33,7 @@ src/
   workspace.ts      # getWorkspaceCwd() = process.cwd()
   writePlan.ts         # writes cwd plan.md
   writeRunArchive.ts   # archives run under .planner-ai/
+  readRunArchive.ts    # list/read archived runs for History tab
   components/          # TUI screens/widgets
   pipeline/            # runPipeline + types
   providers/           # anthropic, cursor, codex, mock, models, prompts, resolve
@@ -47,7 +48,7 @@ src/
 - Credentials belong only in the OS config path from `config.ts` — never commit tokens, never log them.
 - Sanitize pasted tokens with `sanitizeToken` before persist/use.
 - Always-current artifact is `plan.md` in the workspace cwd.
-- Each successful run is also archived under `.planner-ai/plan-{YYYY-MM-DDTHH-MM-SS}/` with per-model `*-output.md` files and a copy of `plan.md` (lexicographic sort newest-last; reverse for newest-first).
+- Each successful run is also archived under `.planner-ai/plan-{YYYY-MM-DDTHH-MM-SS}/` with per-model `*-output.md` files and a copy of `plan.md` (lexicographic sort newest-last; reverse for newest-first). The History tab lists these archives (newest-first) for read-only browsing.
 
 ## Boundaries
 

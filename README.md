@@ -71,6 +71,7 @@ Fullscreen alternate-screen UI with tabs:
 | **Proposers** | `Ctrl+2` | Pick proposer models (multi) — Claude / Cursor / Codex / Mock |
 | **Consensus** | `Ctrl+3` | Pick the consensus model (single) |
 | **Auth** | `Ctrl+4` | Set or clear Claude OAuth / Cursor / Codex API keys |
+| **History** | `Ctrl+5` | Browse past successful runs archived under `.planner-ai/` |
 
 You can also click the tab labels. On Models: click a row or use `↑↓` / `PgUp`/`PgDn`, `Space` toggle/choose, `/` filter, `m` toggle mocks, `c` continues to Plan.
 
@@ -93,3 +94,5 @@ flowchart LR
 ## Output
 
 `plan.md` is the artifact meant for a later execution step. This tool produces the plan; it does not run it.
+
+Each successful run is also archived under `.planner-ai/plan-{YYYY-MM-DDTHH-MM-SS}/` (consensus `plan.md` plus per-proposer `*-output.md`). The **History** tab lists these archives newest-first for read-only browsing.

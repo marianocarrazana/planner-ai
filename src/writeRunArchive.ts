@@ -3,8 +3,9 @@ import path from "node:path";
 import type { ProposalState } from "./pipeline/types.js";
 import { getWorkspaceCwd } from "./workspace.js";
 
-const ARCHIVE_DIR = ".planner-ai";
-const PLAN_FILENAME = "plan.md";
+export const ARCHIVE_DIR = ".planner-ai";
+export const PLAN_FILENAME = "plan.md";
+export const OUTPUT_SUFFIX = "-output.md";
 
 export function formatRunTimestamp(date: Date = new Date()): string {
   const y = date.getFullYear();

@@ -1,6 +1,6 @@
 import { Clickable } from "./Clickable.js";
 
-export type AppTab = "plan" | "proposers" | "consensus" | "auth";
+export type AppTab = "plan" | "proposers" | "consensus" | "auth" | "history";
 
 interface AppTabsProps {
   active: AppTab;
@@ -12,6 +12,7 @@ const TABS: { id: AppTab; label: string }[] = [
   { id: "proposers", label: "Proposers" },
   { id: "consensus", label: "Consensus" },
   { id: "auth", label: "Auth" },
+  { id: "history", label: "History" },
 ];
 
 const DIM = "#888888";

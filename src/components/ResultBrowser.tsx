@@ -7,7 +7,15 @@ interface ResultBrowserProps {
   planPath: string;
   plan: string;
   proposals: ProposalState[];
-  onPlanAnother: () => void;
+  /** When set, shows “Plan another” and handles `n`. */
+  onPlanAnother?: () => void;
+  /**
+   * When set, q / Enter / Esc call this instead of destroying the renderer.
+   * Used by History to return to the run list.
+   */
+  onExit?: () => void;
+  /** Header title. Defaults to “Plan ready” (live) or “Archived run”. */
+  title?: string;
 }
 
 const PLAN_TAB_ID = "plan";
@@ -28,9 +36,13 @@ export function ResultBrowser({
   plan,
   proposals,
   onPlanAnother,
+  onExit,
+  title,
 }: ResultBrowserProps) {
   const renderer = useRenderer();
   const { width: columns, height: rows } = useTerminalDimensions();
+  const canPlanAnother = Boolean(onPlanAnother);
+  const heading = title ?? (onExit ? "Archived run" : "Plan ready");
 
   const tabs = useMemo(
     () => [
@@ -51,7 +63,8 @@ export function ResultBrowser({
 
   const rowWidth = Math.max(20, columns - 4);
   // Header chrome + result tabs + status + hints + padding (+ N-of-M / plan-another)
-  const bodyHeight = Math.max(5, rows - (hasErrors ? 18 : 17));
+  const chromeRows = (hasErrors ? 17 : 16) + (canPlanAnother ? 1 : 0);
+  const bodyHeight = Math.max(5, rows - chromeRows);
 
   const activeProposal =
     activeTab === PLAN_TAB_ID
@@ -97,13 +110,21 @@ export function ResultBrowser({
     setScrollTop((prev) => clamp(prev + delta, 0, maxScroll));
   };
 
+  const exit = () => {
+    if (onExit) {
+      onExit();
+      return;
+    }
+    renderer.destroy();
+  };
+
   useKeyboard((key) => {
     if (key.name === "q" || key.name === "return" || key.name === "escape") {
-      renderer.destroy();
+      exit();
       return;
     }
 
-    if (key.name === "n") {
+    if (key.name === "n" && onPlanAnother) {
       onPlanAnother();
       return;
     }
@@ -139,18 +160,23 @@ export function ResultBrowser({
       ? ` · lines ${scrollTop + 1}–${Math.min(lines.length, scrollTop + bodyHeight)} of ${lines.length}`
       : "";
 
+  const planPathLabel = onExit ? planPath : `Wrote ${planPath}`;
   const statusLine =
     activeTab === PLAN_TAB_ID
-      ? `Wrote ${planPath}${scrollHint}`
+      ? `${planPathLabel}${scrollHint}`
       : activeProposal?.error
         ? `Error · ${activeProposal.label}${scrollHint}`
         : `${activeProposal?.label ?? "Proposal"}${scrollHint}`;
+
+  const hints = canPlanAnother
+    ? "←→/[ ] tabs · ↑↓/wheel/PgUp/PgDn scroll · n plan another · Enter or q exit"
+    : "←→/[ ] tabs · ↑↓/wheel/PgUp/PgDn scroll · Esc/Enter/q back";
 
   return (
     <box flexDirection="column" gap={1} flexGrow={1} width={rowWidth}>
       <box flexDirection="column" gap={0}>
         <text fg="green">
-          <strong>Plan ready</strong>
+          <strong>{heading}</strong>
         </text>
         {hasErrors ? (
           <text fg={DIM}>
@@ -219,15 +245,12 @@ export function ResultBrowser({
         )}
       </box>
 
-      <Clickable onClick={onPlanAnother}>
-        <text fg="cyan">→ Plan another (or press n)</text>
-      </Clickable>
-      <text fg={DIM}>
-        {fitRow(
-          "←→/[ ] tabs · ↑↓/wheel/PgUp/PgDn scroll · n plan another · Enter or q exit",
-          rowWidth,
-        )}
-      </text>
+      {onPlanAnother ? (
+        <Clickable onClick={onPlanAnother}>
+          <text fg="cyan">→ Plan another (or press n)</text>
+        </Clickable>
+      ) : null}
+      <text fg={DIM}>{fitRow(hints, rowWidth)}</text>
     </box>
   );
 }
