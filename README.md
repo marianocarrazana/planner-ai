@@ -2,19 +2,22 @@
 
 A terminal UI that turns a goal into a consensus plan across multiple models.
 
-## What it does
-
-- Plans against the folder you launched the CLI in
-- Asks several models for a plan in parallel
-- Uses a separate consensus model to reconcile disagreements
-- Writes a single `plan.md` in that folder, ready to execute later
-
-## Setup
+## Install
 
 Requires [Bun](https://bun.sh) ≥ 1.2.
 
 ```bash
+git clone https://github.com/marianocarrazana/planner-ai.git
+cd planner-ai
 bun install
+bun link
+```
+
+Then from any project you want to plan:
+
+```bash
+cd ~/code/my-app
+planner
 ```
 
 On first run the TUI asks for tokens when none are stored (set at least one real provider; Enter skips a field):
@@ -34,32 +37,15 @@ Providers without a key are omitted; if none are set, mock providers are used.
 If a stored key fails auth during a run, the error screen offers **`r`** to remove that key from config and re-enter it (or **`q`** to quit). To clear all credentials without running the TUI:
 
 ```bash
-bun start -- --reset-auth
-# or: bun run dev -- --reset-auth
+planner --reset-auth
 ```
 
-## Run
+## What it does
 
-The CLI plans against the folder you launch it from (same rule as Claude Code). `cd` into the project first:
-
-```bash
-cd ~/code/my-app
-bun --cwd /path/to/planner-ai run src/cli.tsx
-```
-
-Or from this repo (plans *this* repo):
-
-```bash
-bun run dev
-```
-
-With the `planner-ai` bin linked (same Bun shebang):
-
-```bash
-bun link
-cd ~/code/my-app
-planner
-```
+- Plans against the folder you launched the CLI in
+- Asks several models for a plan in parallel
+- Uses a separate consensus model to reconcile disagreements
+- Writes a single `plan.md` in that folder, ready to execute later
 
 ## TUI
 
@@ -96,3 +82,26 @@ flowchart LR
 `plan.md` is the artifact meant for a later execution step. This tool produces the plan; it does not run it.
 
 Each successful run is also archived under `.planner-ai/plan-{YYYY-MM-DDTHH-MM-SS}/` (consensus `plan.md` plus per-proposer `*-output.md`). The **History** tab lists these archives newest-first for read-only browsing.
+
+## Development
+
+From this repo (plans *this* repo):
+
+```bash
+bun install
+bun run dev
+```
+
+Or without linking, plan another folder:
+
+```bash
+cd ~/code/my-app
+bun --cwd /path/to/planner-ai run src/cli.tsx
+```
+
+Reset credentials while developing:
+
+```bash
+bun start -- --reset-auth
+# or: bun run dev -- --reset-auth
+```
