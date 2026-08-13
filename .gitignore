@@ -1,7 +1,30 @@
-node_modules/
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
 dist/
-.pnpm-store/
+build/
+*.egg
+
+# Testing / lint
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Env / secrets
 .env
-*.log
+.env.*
+
+# OS
 .DS_Store
+
+# Logs
+*.log
+
+# App artifacts
 .planner-ai/
+plan.md.bak

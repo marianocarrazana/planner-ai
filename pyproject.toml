@@ -1,0 +1,22 @@
+[project]
+name = "planner-ai"
+version = "0.1.0"
+description = "Terminal UI that turns a goal into a consensus plan across multiple models"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "claude-agent-sdk>=0.2.137",
+    "cursor-sdk>=1.0.28",
+    "openai-codex>=0.144.4",
+    "textual>=8.2.8",
+]
+
+[project.scripts]
+planner = "planner_ai.cli:main"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

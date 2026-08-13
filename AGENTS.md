@@ -1,52 +1,58 @@
-# AGENTS.md
+# AGENTS.md (Python package)
+
+Agent notes for the Python port under `planner-ai/`. Product rules match the repo-root [`AGENTS.md`](../AGENTS.md); commands and stack below are Python-specific.
 
 ## Project
 
-Terminal UI (OpenTUI + React) that asks several models for a plan or answer in parallel, reconciles via a consensus model, and either writes `plan.md` (Plan mode) or returns a Q&A answer (Ask mode). It plans/answers; it does not execute.
+Terminal UI (Textual) that asks several models for a plan or answer in parallel, reconciles via a consensus model, and either writes `plan.md` (Plan mode) or returns a Q&A answer (Ask mode). It plans/answers; it does not execute.
 
 ## Stack
 
-- Runtime: Bun ≥ 1.2 (`type: "module"`)
-- UI: `@opentui/core` + `@opentui/react` (JSX import source is `@opentui/react`, not `react`)
-- Providers: Anthropic Claude Agent SDK, Cursor SDK, OpenAI Codex SDK, plus mock fallbacks
-- Language: TypeScript strict; ESM imports use `.js` extensions (`./foo.js`)
+- Runtime: Python ≥ 3.14 + `uv`
+- UI: Textual
+- Providers: `claude-agent-sdk`, `cursor-sdk`, `openai-codex`, plus mock fallbacks
+- Language: Python; package layout under `src/planner_ai/`
 
 ## Commands
 
+From `planner-ai/`:
+
 ```bash
-bun install
-bun run dev          # TUI (plans cwd)
-bun start            # same as dev
-bun run typecheck    # tsc --noEmit
-bun start -- --reset-auth   # clear stored credentials
+uv sync
+uv run planner                    # TUI (plans cwd)
+uv run python -m planner_ai       # same
+uv run planner --reset-auth       # clear stored credentials; does not start TUI
+uv run pytest
+uv run ruff check src tests
 ```
 
-There is no test suite yet. Prefer `bun run typecheck` after meaningful edits.
+Console script name is `planner` (same as the TypeScript bin). Prefer one install on `PATH` at a time.
 
 ## Layout
 
 ```
-src/
-  cli.tsx           # entry, --reset-auth, OpenTUI renderer
-  app.tsx           # tabs + orchestration
-  config.ts         # OS user config (tokens + model selection)
-  workspace.ts      # getWorkspaceCwd() = process.cwd()
-  writePlan.ts         # writes cwd plan.md (Plan mode only)
-  writeRunArchive.ts   # archives run under .planner-ai/
-  readRunArchive.ts    # list/read archived runs for History tab
-  components/          # TUI screens/widgets
-  pipeline/            # runPipeline + types
-  providers/           # anthropic, cursor, codex, mock, models, prompts, resolve
+src/planner_ai/
+  cli.py                 # --reset-auth + Textual app
+  app.py                 # tabs + orchestration
+  config.py              # OS user config (tokens + model selection)
+  workspace.py           # get_workspace_cwd() = Path.cwd().resolve()
+  write_plan.py          # writes cwd plan.md (Plan mode only)
+  write_run_archive.py   # archives run under .planner-ai/
+  read_run_archive.py    # list/read archived runs for History tab
+  ui/                    # Textual screens/widgets
+  pipeline/              # run_pipeline + types
+  providers/             # anthropic, cursor, codex, mock, models, prompts, resolve
+tests/
 ```
 
 ## Conventions
 
-- Keep changes scoped; match existing naming and component style.
-- Provider surface: `ModelProvider.propose` and `ConsensusProvider.reconcile` in `providers/types.ts`.
-- Wire new models through `providers/models.ts` and `providers/resolve.ts`.
-- Prompts live in `providers/prompts.ts`; keep them read-only over the workspace. Plan vs Ask prompts are selected via `ProviderCallOptions.mode`.
-- Credentials belong only in the OS config path from `config.ts` — never commit tokens, never log them.
-- Sanitize pasted tokens with `sanitizeToken` before persist/use.
+- Keep changes scoped; match existing naming and widget style.
+- Provider surface: `ModelProvider.propose` and `ConsensusProvider.reconcile` in `providers/types.py`.
+- Wire new models through `providers/models.py` and `providers/resolve.py`.
+- Prompts live in `providers/prompts.py`; keep them read-only over the workspace. Plan vs Ask via `ProviderCallOptions.mode`.
+- Credentials belong only in the OS config path from `config.py` — never commit tokens, never log them.
+- Sanitize pasted tokens with `sanitize_token` before persist/use.
 - Plan mode: always-current artifact is `plan.md` in the workspace cwd.
 - Ask mode: Plan tab toggle; same multi-proposer + consensus flow with Q&A prompts; does not write cwd `plan.md`.
 - Each successful run is archived under `.planner-ai/`:
@@ -58,21 +64,22 @@ src/
 
 **Always**
 
-- Run `bun run typecheck` when touching shared types or providers.
+- Run `uv run ruff check src tests` and focused `uv run pytest` after meaningful edits.
 - Preserve alternate-screen TUI behavior and existing keyboard shortcuts unless changing them intentionally.
+- Keep archive layout and config JSON keys compatible with the TypeScript app.
 
 **Ask first**
 
 - Adding a new LLM provider or changing auth/credential storage.
 - Renaming or relocating `plan.md` / workspace resolution.
-- Introducing a package manager other than Bun, or adding a test runner.
+- Introducing a package manager other than `uv`.
 
 **Never**
 
 - Commit `.env`, credentials, or real API keys.
 - Execute the generated plan as part of this tool’s job.
-- Add SQL/drizzle migrations or a `drizzle/` folder (out of scope for this repo).
-- Never remove the user credentials (bun start -- --reset-auth)
+- Add SQL/drizzle migrations or a `drizzle/` folder.
+- Clear user credentials except via `--reset-auth` / Auth tab flows the user chose.
 
 ## Commits
 
