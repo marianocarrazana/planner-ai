@@ -4,7 +4,7 @@
   "description": "Terminal UI that turns a goal into a consensus plan across multiple models",
   "type": "module",
   "bin": {
-    "planner-ai": "./src/cli.tsx"
+    "planner": "./src/cli.tsx"
   },
   "scripts": {
     "dev": "bun run src/cli.tsx",

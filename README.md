@@ -58,7 +58,7 @@ With the `planner-ai` bin linked (same Bun shebang):
 ```bash
 bun link
 cd ~/code/my-app
-planner-ai
+planner
 ```
 
 ## TUI
