@@ -6,10 +6,8 @@ import {
   ProviderAbortError,
 } from "./callAbort.js";
 import {
-  CONSENSUS_SYSTEM,
-  PROPOSE_SYSTEM,
-  consensusUserPrompt,
-  proposeUserPrompt,
+  resolveConsensusPrompts,
+  resolveProposePrompts,
 } from "./prompts.js";
 import type {
   ConsensusProvider,
@@ -118,13 +116,8 @@ export function createAnthropicProposer(
     label,
     async propose(goal: string, options?: ProviderCallOptions): Promise<string> {
       const cwd = getWorkspaceCwd();
-      return runClaude(
-        token,
-        modelId,
-        PROPOSE_SYSTEM,
-        proposeUserPrompt(goal, cwd),
-        options,
-      );
+      const { system, user } = resolveProposePrompts(options?.mode, goal, cwd);
+      return runClaude(token, modelId, system, user, options);
     },
   };
 }
@@ -136,13 +129,13 @@ export function createAnthropicConsensus(
   return {
     async reconcile(goal, proposals, options?: ProviderCallOptions) {
       const cwd = getWorkspaceCwd();
-      return runClaude(
-        token,
-        modelId,
-        CONSENSUS_SYSTEM,
-        consensusUserPrompt(goal, cwd, proposals),
-        options,
+      const { system, user } = resolveConsensusPrompts(
+        options?.mode,
+        goal,
+        cwd,
+        proposals,
       );
+      return runClaude(token, modelId, system, user, options);
     },
   };
 }

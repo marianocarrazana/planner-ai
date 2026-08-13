@@ -152,11 +152,13 @@ export function HistoryScreen() {
   if (view.kind === "detail") {
     return (
       <ResultBrowser
-        planPath={view.run.path}
+        mode={view.archived.kind}
+        planPath={null}
+        archivePath={view.run.path}
         plan={view.archived.plan}
         proposals={view.archived.proposals}
         onExit={backToList}
-        title={`Archived · ${view.run.timestampLabel}`}
+        title={`Archived · ${view.archived.kind} · ${view.run.timestampLabel}`}
       />
     );
   }
@@ -242,7 +244,7 @@ export function HistoryScreen() {
               run.outputCount === 1
                 ? "1 proposer"
                 : `${run.outputCount} proposers`;
-            const label = `${run.timestampLabel}  ·  ${countLabel}`;
+            const label = `${run.kind}  ·  ${run.timestampLabel}  ·  ${countLabel}`;
             return (
               <Clickable
                 key={run.id}

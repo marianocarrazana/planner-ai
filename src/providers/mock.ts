@@ -22,6 +22,23 @@ function createMockProposer(
       } finally {
         abort.cleanup();
       }
+      if (options?.mode === "ask") {
+        return [
+          `# Answer from ${label}`,
+          "",
+          `Question: ${goal}`,
+          "",
+          `## Take (${angle})`,
+          "",
+          `Based on a quick look at the workspace, here is a ${angle} answer to: ${goal}`,
+          "",
+          "Key points:",
+          `- Ground the reply in the working directory (${angle})`,
+          "- Prefer concrete references over speculation",
+          "- Call out unknowns when the code is unclear",
+          "",
+        ].join("\n");
+      }
       return [
         `# Proposal from ${label}`,
         "",
@@ -55,6 +72,26 @@ export const mockConsensus: ConsensusProvider = {
       abort.cleanup();
     }
     const sources = proposals.map((p) => `- ${p.id}`).join("\n");
+    if (options?.mode === "ask") {
+      return [
+        `# Answer`,
+        "",
+        `## Question`,
+        "",
+        goal,
+        "",
+        "## Response",
+        "",
+        "Merged from the following answers:",
+        sources,
+        "",
+        "The consensus answer is a concise synthesis of the proposer replies,",
+        "grounded in the workspace and free of a planning template.",
+        "",
+        "This answer was produced by planner-ai consensus (mock).",
+        "",
+      ].join("\n");
+    }
     return [
       `# Plan`,
       "",

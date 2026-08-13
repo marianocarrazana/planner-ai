@@ -2,7 +2,7 @@
 
 ## Project
 
-Terminal UI (OpenTUI + React) that asks several models for a plan in parallel, reconciles via a consensus model, and writes `plan.md` in the launch directory. It plans; it does not execute.
+Terminal UI (OpenTUI + React) that asks several models for a plan or answer in parallel, reconciles via a consensus model, and either writes `plan.md` (Plan mode) or returns a Q&A answer (Ask mode). It plans/answers; it does not execute.
 
 ## Stack
 
@@ -31,7 +31,7 @@ src/
   app.tsx           # tabs + orchestration
   config.ts         # OS user config (tokens + model selection)
   workspace.ts      # getWorkspaceCwd() = process.cwd()
-  writePlan.ts         # writes cwd plan.md
+  writePlan.ts         # writes cwd plan.md (Plan mode only)
   writeRunArchive.ts   # archives run under .planner-ai/
   readRunArchive.ts    # list/read archived runs for History tab
   components/          # TUI screens/widgets
@@ -44,11 +44,15 @@ src/
 - Keep changes scoped; match existing naming and component style.
 - Provider surface: `ModelProvider.propose` and `ConsensusProvider.reconcile` in `providers/types.ts`.
 - Wire new models through `providers/models.ts` and `providers/resolve.ts`.
-- Prompts live in `providers/prompts.ts`; keep them read-only over the workspace.
+- Prompts live in `providers/prompts.ts`; keep them read-only over the workspace. Plan vs Ask prompts are selected via `ProviderCallOptions.mode`.
 - Credentials belong only in the OS config path from `config.ts` — never commit tokens, never log them.
 - Sanitize pasted tokens with `sanitizeToken` before persist/use.
-- Always-current artifact is `plan.md` in the workspace cwd.
-- Each successful run is also archived under `.planner-ai/plan-{YYYY-MM-DDTHH-MM-SS}/` with per-model `*-output.md` files and a copy of `plan.md` (lexicographic sort newest-last; reverse for newest-first). The History tab lists these archives (newest-first) for read-only browsing.
+- Plan mode: always-current artifact is `plan.md` in the workspace cwd.
+- Ask mode: Plan tab toggle; same multi-proposer + consensus flow with Q&A prompts; does not write cwd `plan.md`.
+- Each successful run is archived under `.planner-ai/`:
+  - Plan: `plan-{YYYY-MM-DDTHH-MM-SS}/` with per-model `*-output.md` and `plan.md`
+  - Ask: `ask-{YYYY-MM-DDTHH-MM-SS}/` with per-model `*-output.md` and `answer.md`
+  - History lists both kinds newest-first (sorted by timestamp, not full dirname).
 
 ## Boundaries
 

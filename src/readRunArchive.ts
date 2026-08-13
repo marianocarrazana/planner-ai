@@ -1,36 +1,63 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import type { ProposalState } from "./pipeline/types.js";
+import type { ProposalState, RunMode } from "./pipeline/types.js";
 import {
+  ANSWER_FILENAME,
   ARCHIVE_DIR,
   OUTPUT_SUFFIX,
   PLAN_FILENAME,
+  primaryDocFilename,
 } from "./writeRunArchive.js";
 import { getWorkspaceCwd } from "./workspace.js";
 
 const RUN_DIR_RE =
-  /^plan-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})(?:-(\d+))?$/;
+  /^(plan|ask)-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})(?:-(\d+))?$/;
 
 export interface ArchivedRunSummary {
   id: string;
+  kind: RunMode;
   dirName: string;
   path: string;
+  /** Lexicographic timestamp key for newest-first sort (includes collision suffix). */
+  sortKey: string;
   timestampLabel: string;
   outputCount: number;
 }
 
 export interface ArchivedRun {
   path: string;
+  kind: RunMode;
   plan: string;
   proposals: ProposalState[];
 }
 
-function formatTimestampLabel(dirName: string): string {
+function parseRunDir(
+  dirName: string,
+): { kind: RunMode; timestamp: string; collision?: string } | null {
   const match = RUN_DIR_RE.exec(dirName);
-  if (!match?.[1]) return dirName;
-  const [datePart, timePart = ""] = match[1].split("T");
+  if (!match?.[1] || !match[2]) return null;
+  const kind = match[1] as RunMode;
+  return {
+    kind,
+    timestamp: match[2],
+    collision: match[3],
+  };
+}
+
+function formatTimestampLabel(dirName: string): string {
+  const parsed = parseRunDir(dirName);
+  if (!parsed) return dirName;
+  const [datePart, timePart = ""] = parsed.timestamp.split("T");
   const label = `${datePart} ${timePart.replace(/-/g, ":")}`;
-  return match[2] ? `${label} (${match[2]})` : label;
+  return parsed.collision ? `${label} (${parsed.collision})` : label;
+}
+
+function sortKeyFor(dirName: string): string {
+  const parsed = parseRunDir(dirName);
+  if (!parsed) return dirName;
+  return parsed.collision
+    ? `${parsed.timestamp}-${parsed.collision}`
+    : parsed.timestamp;
 }
 
 function isErrorBody(body: string): boolean {
@@ -70,7 +97,9 @@ export async function listArchivedRuns(
 
   const runs: ArchivedRunSummary[] = [];
   for (const entry of entries) {
-    if (!entry.isDirectory() || !RUN_DIR_RE.test(entry.name)) continue;
+    if (!entry.isDirectory()) continue;
+    const parsed = parseRunDir(entry.name);
+    if (!parsed) continue;
     const runPath = path.join(archiveRoot, entry.name);
     let outputCount = 0;
     try {
@@ -81,22 +110,28 @@ export async function listArchivedRuns(
     }
     runs.push({
       id: entry.name,
+      kind: parsed.kind,
       dirName: entry.name,
       path: runPath,
+      sortKey: sortKeyFor(entry.name),
       timestampLabel: formatTimestampLabel(entry.name),
       outputCount,
     });
   }
 
-  runs.sort((a, b) => (a.dirName < b.dirName ? 1 : a.dirName > b.dirName ? -1 : 0));
+  runs.sort((a, b) =>
+    a.sortKey < b.sortKey ? 1 : a.sortKey > b.sortKey ? -1 : 0,
+  );
   return runs;
 }
 
-export async function readArchivedRun(runDir: string): Promise<ArchivedRun> {
-  const planPath = path.join(runDir, PLAN_FILENAME);
-  let plan = "";
+async function readPrimaryDoc(
+  runDir: string,
+  kind: RunMode,
+): Promise<string> {
+  const preferred = path.join(runDir, primaryDocFilename(kind));
   try {
-    plan = await readFile(planPath, "utf8");
+    return await readFile(preferred, "utf8");
   } catch (err) {
     const code =
       err && typeof err === "object" && "code" in err
@@ -104,6 +139,28 @@ export async function readArchivedRun(runDir: string): Promise<ArchivedRun> {
         : undefined;
     if (code !== "ENOENT") throw err;
   }
+
+  // Fallback for mixed/legacy layouts.
+  const fallbackName =
+    kind === "ask" ? PLAN_FILENAME : ANSWER_FILENAME;
+  try {
+    return await readFile(path.join(runDir, fallbackName), "utf8");
+  } catch (err) {
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? (err as { code?: string }).code
+        : undefined;
+    if (code === "ENOENT") return "";
+    throw err;
+  }
+}
+
+export async function readArchivedRun(runDir: string): Promise<ArchivedRun> {
+  const dirName = path.basename(runDir);
+  const parsed = parseRunDir(dirName);
+  const kind: RunMode = parsed?.kind ?? "plan";
+
+  const plan = await readPrimaryDoc(runDir, kind);
 
   let files: string[] = [];
   try {
@@ -139,5 +196,5 @@ export async function readArchivedRun(runDir: string): Promise<ArchivedRun> {
     }
   }
 
-  return { path: runDir, plan, proposals };
+  return { path: runDir, kind, plan, proposals };
 }

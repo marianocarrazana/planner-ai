@@ -14,7 +14,7 @@ import {
   type ConfigCredentialKey,
 } from "./config.js";
 import { runPipeline } from "./pipeline/runPipeline.js";
-import type { Phase, ProposalState } from "./pipeline/types.js";
+import type { Phase, ProposalState, RunMode } from "./pipeline/types.js";
 import { collectFailingCredentialKeys } from "./providers/authError.js";
 import {
   availableChoices,
@@ -80,12 +80,14 @@ export function App() {
     null,
   );
   const [providers, setProviders] = useState<ResolvedProviders | null>(null);
+  const [runMode, setRunMode] = useState<RunMode>("plan");
   const [goal, setGoal] = useState("");
   const [proposals, setProposals] = useState<ProposalState[]>([]);
   const [consensusStartedAt, setConsensusStartedAt] = useState<number | null>(
     null,
   );
   const [planPath, setPlanPath] = useState<string | null>(null);
+  const [archivePath, setArchivePath] = useState<string | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [failingKeys, setFailingKeys] = useState<ConfigCredentialKey[]>([]);
@@ -263,13 +265,15 @@ export function App() {
   }, [config.includeMocks, activeTab, reloadModels, goTab]);
 
   const start = useCallback(
-    async (nextGoal: string) => {
+    async (nextGoal: string, mode: RunMode = runMode) => {
       if (!providers) return;
 
+      setRunMode(mode);
       setGoal(nextGoal);
       setError(null);
       setFailingKeys([]);
       setPlanPath(null);
+      setArchivePath(null);
       setPlan(null);
       setProposals([]);
       setConsensusStartedAt(null);
@@ -289,9 +293,12 @@ export function App() {
             },
             onConsensusStarted: setConsensusStartedAt,
           },
+          { mode },
         );
         setPlanPath(result.planPath);
+        setArchivePath(result.archivePath);
         setPlan(result.plan);
+        setRunMode(result.mode);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         const keys = collectFailingCredentialKeys({
@@ -304,7 +311,7 @@ export function App() {
         setError(message);
       }
     },
-    [providers],
+    [providers, runMode],
   );
 
   const removeFailingKeys = useCallback(async () => {
@@ -321,6 +328,7 @@ export function App() {
       setProposals([]);
       setConsensusStartedAt(null);
       setPlanPath(null);
+      setArchivePath(null);
       setPlan(null);
       setPhase("idle");
       await reloadModels(next, "auth");
@@ -384,7 +392,11 @@ export function App() {
         ) : (
           <text fg={DIM}>config: {getConfigPath()}</text>
         )}
-        {goal ? <text fg={DIM}>Goal: {goal}</text> : null}
+        {goal ? (
+          <text fg={DIM}>
+            {runMode === "ask" ? "Question" : "Goal"}: {goal}
+          </text>
+        ) : null}
         <text fg={DIM}>
           Tabs: click or Ctrl+1 Plan · Ctrl+2 Proposers · Ctrl+3 Consensus ·
           Ctrl+4 Auth · Ctrl+5 History
@@ -400,15 +412,18 @@ export function App() {
           <PlanScreen
             phase={phase}
             gate={planGate}
+            mode={runMode}
+            onModeChange={setRunMode}
             goal={goal}
             proposals={proposals}
             consensusStartedAt={consensusStartedAt}
             planPath={planPath}
+            archivePath={archivePath}
             plan={plan}
             error={error}
             failingLabels={failingLabels}
             onSubmitGoal={(nextGoal) => {
-              void start(nextGoal);
+              void start(nextGoal, runMode);
             }}
             onGoModels={() => goTab("proposers")}
             onGoAuth={() => goTab("auth")}
@@ -418,17 +433,19 @@ export function App() {
             onPlanAnother={() => {
               setPlan(null);
               setPlanPath(null);
+              setArchivePath(null);
               setError(null);
               setProposals([]);
               setConsensusStartedAt(null);
               setPhase("idle");
             }}
             onRetry={() => {
-              if (goal.trim()) void start(goal);
+              if (goal.trim()) void start(goal, runMode);
             }}
             onBackToIdle={() => {
               setPlan(null);
               setPlanPath(null);
+              setArchivePath(null);
               setError(null);
               setProposals([]);
               setConsensusStartedAt(null);

@@ -1,24 +1,28 @@
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useMemo, useState } from "react";
-import type { ProposalState } from "../pipeline/types.js";
+import type { ProposalState, RunMode } from "../pipeline/types.js";
 import { Clickable } from "./Clickable.js";
 
 interface ResultBrowserProps {
-  planPath: string;
+  mode?: RunMode;
+  /** Workspace plan.md path when written; null for ask mode. */
+  planPath?: string | null;
+  /** Archive directory under .planner-ai/. */
+  archivePath: string;
   plan: string;
   proposals: ProposalState[];
-  /** When set, shows “Plan another” and handles `n`. */
+  /** When set, shows “Plan/Ask another” and handles `n`. */
   onPlanAnother?: () => void;
   /**
    * When set, q / Enter / Esc call this instead of destroying the renderer.
    * Used by History to return to the run list.
    */
   onExit?: () => void;
-  /** Header title. Defaults to “Plan ready” (live) or “Archived run”. */
+  /** Header title. Defaults by mode (live) or “Archived run”. */
   title?: string;
 }
 
-const PLAN_TAB_ID = "plan";
+const PRIMARY_TAB_ID = "primary";
 const DIM = "#888888";
 
 function clamp(value: number, min: number, max: number): number {
@@ -32,7 +36,9 @@ function fitRow(text: string, width: number): string {
 }
 
 export function ResultBrowser({
-  planPath,
+  mode = "plan",
+  planPath = null,
+  archivePath,
   plan,
   proposals,
   onPlanAnother,
@@ -42,23 +48,28 @@ export function ResultBrowser({
   const renderer = useRenderer();
   const { width: columns, height: rows } = useTerminalDimensions();
   const canPlanAnother = Boolean(onPlanAnother);
-  const heading = title ?? (onExit ? "Archived run" : "Plan ready");
+  const isAsk = mode === "ask";
+  const primaryLabel = isAsk ? "Answer" : "Plan";
+  const anotherLabel = isAsk ? "Ask another" : "Plan another";
+  const heading =
+    title ??
+    (onExit ? "Archived run" : isAsk ? "Answer ready" : "Plan ready");
 
   const tabs = useMemo(
     () => [
-      { id: PLAN_TAB_ID, label: "Plan" },
+      { id: PRIMARY_TAB_ID, label: primaryLabel },
       ...proposals.map((proposal) => ({
         id: proposal.id,
         label: proposal.label,
       })),
     ],
-    [proposals],
+    [proposals, primaryLabel],
   );
 
   const hasErrors = proposals.some((p) => p.status === "error");
   const doneCount = proposals.filter((p) => p.status === "done").length;
 
-  const [activeTab, setActiveTab] = useState(PLAN_TAB_ID);
+  const [activeTab, setActiveTab] = useState(PRIMARY_TAB_ID);
   const [scrollTop, setScrollTop] = useState(0);
 
   const rowWidth = Math.max(20, columns - 4);
@@ -67,12 +78,12 @@ export function ResultBrowser({
   const bodyHeight = Math.max(5, rows - chromeRows);
 
   const activeProposal =
-    activeTab === PLAN_TAB_ID
+    activeTab === PRIMARY_TAB_ID
       ? null
       : (proposals.find((p) => p.id === activeTab) ?? null);
 
   const bodyText = useMemo(() => {
-    if (activeTab === PLAN_TAB_ID) return plan;
+    if (activeTab === PRIMARY_TAB_ID) return plan;
     if (!activeProposal) return "";
     if (activeProposal.error) return activeProposal.error;
     return activeProposal.body ?? "";
@@ -160,16 +171,20 @@ export function ResultBrowser({
       ? ` · lines ${scrollTop + 1}–${Math.min(lines.length, scrollTop + bodyHeight)} of ${lines.length}`
       : "";
 
-  const planPathLabel = onExit ? planPath : `Wrote ${planPath}`;
+  const pathLabel = onExit
+    ? archivePath
+    : planPath
+      ? `Wrote ${planPath} · archived ${archivePath}`
+      : `Archived ${archivePath}`;
   const statusLine =
-    activeTab === PLAN_TAB_ID
-      ? `${planPathLabel}${scrollHint}`
+    activeTab === PRIMARY_TAB_ID
+      ? `${pathLabel}${scrollHint}`
       : activeProposal?.error
         ? `Error · ${activeProposal.label}${scrollHint}`
         : `${activeProposal?.label ?? "Proposal"}${scrollHint}`;
 
   const hints = canPlanAnother
-    ? "←→/[ ] tabs · ↑↓/wheel/PgUp/PgDn scroll · n plan another · Enter or q exit"
+    ? `←→/[ ] tabs · ↑↓/wheel/PgUp/PgDn scroll · n ${anotherLabel.toLowerCase()} · Enter or q exit`
     : "←→/[ ] tabs · ↑↓/wheel/PgUp/PgDn scroll · Esc/Enter/q back";
 
   return (
@@ -247,7 +262,7 @@ export function ResultBrowser({
 
       {onPlanAnother ? (
         <Clickable onClick={onPlanAnother}>
-          <text fg="cyan">→ Plan another (or press n)</text>
+          <text fg="cyan">→ {anotherLabel} (or press n)</text>
         </Clickable>
       ) : null}
       <text fg={DIM}>{fitRow(hints, rowWidth)}</text>

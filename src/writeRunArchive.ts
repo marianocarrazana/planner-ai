@@ -1,10 +1,11 @@
 import { access, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { ProposalState } from "./pipeline/types.js";
+import type { ProposalState, RunMode } from "./pipeline/types.js";
 import { getWorkspaceCwd } from "./workspace.js";
 
 export const ARCHIVE_DIR = ".planner-ai";
 export const PLAN_FILENAME = "plan.md";
+export const ANSWER_FILENAME = "answer.md";
 export const OUTPUT_SUFFIX = "-output.md";
 
 export function formatRunTimestamp(date: Date = new Date()): string {
@@ -21,6 +22,10 @@ export function sanitizeModelId(id: string): string {
   return id.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "model";
 }
 
+export function primaryDocFilename(kind: RunMode): string {
+  return kind === "ask" ? ANSWER_FILENAME : PLAN_FILENAME;
+}
+
 async function pathExists(target: string): Promise<boolean> {
   try {
     await access(target);
@@ -30,13 +35,17 @@ async function pathExists(target: string): Promise<boolean> {
   }
 }
 
-async function allocateRunDir(archiveRoot: string, timestamp: string): Promise<string> {
-  let candidate = path.join(archiveRoot, `plan-${timestamp}`);
+async function allocateRunDir(
+  archiveRoot: string,
+  kind: RunMode,
+  timestamp: string,
+): Promise<string> {
+  let candidate = path.join(archiveRoot, `${kind}-${timestamp}`);
   if (!(await pathExists(candidate))) {
     return candidate;
   }
   for (let n = 2; ; n++) {
-    candidate = path.join(archiveRoot, `plan-${timestamp}-${n}`);
+    candidate = path.join(archiveRoot, `${kind}-${timestamp}-${n}`);
     if (!(await pathExists(candidate))) {
       return candidate;
     }
@@ -52,6 +61,7 @@ function proposalBody(proposal: ProposalState): string {
 }
 
 export interface WriteRunArchiveInput {
+  kind: RunMode;
   plan: string;
   proposals: ProposalState[];
   cwd?: string;
@@ -59,6 +69,7 @@ export interface WriteRunArchiveInput {
 }
 
 export async function writeRunArchive({
+  kind,
   plan,
   proposals,
   cwd = getWorkspaceCwd(),
@@ -67,7 +78,11 @@ export async function writeRunArchive({
   const archiveRoot = path.join(cwd, ARCHIVE_DIR);
   await mkdir(archiveRoot, { recursive: true });
 
-  const runDir = await allocateRunDir(archiveRoot, formatRunTimestamp(date));
+  const runDir = await allocateRunDir(
+    archiveRoot,
+    kind,
+    formatRunTimestamp(date),
+  );
   await mkdir(runDir, { recursive: true });
 
   for (const proposal of proposals) {
@@ -75,6 +90,6 @@ export async function writeRunArchive({
     await writeFile(path.join(runDir, filename), proposalBody(proposal), "utf8");
   }
 
-  await writeFile(path.join(runDir, PLAN_FILENAME), plan, "utf8");
+  await writeFile(path.join(runDir, primaryDocFilename(kind)), plan, "utf8");
   return runDir;
 }

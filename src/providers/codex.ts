@@ -6,10 +6,8 @@ import {
   ProviderAbortError,
 } from "./callAbort.js";
 import {
-  CONSENSUS_SYSTEM,
-  PROPOSE_SYSTEM,
-  consensusUserPrompt,
-  proposeUserPrompt,
+  resolveConsensusPrompts,
+  resolveProposePrompts,
 } from "./prompts.js";
 import type {
   ConsensusProvider,
@@ -70,12 +68,8 @@ export function createCodexProposer(
     label,
     async propose(goal: string, options?: ProviderCallOptions): Promise<string> {
       const cwd = getWorkspaceCwd();
-      return runPrompt(
-        apiKey,
-        modelId,
-        `${PROPOSE_SYSTEM}\n\n${proposeUserPrompt(goal, cwd)}`,
-        options,
-      );
+      const { system, user } = resolveProposePrompts(options?.mode, goal, cwd);
+      return runPrompt(apiKey, modelId, `${system}\n\n${user}`, options);
     },
   };
 }
@@ -87,12 +81,13 @@ export function createCodexConsensus(
   return {
     async reconcile(goal, proposals, options?: ProviderCallOptions) {
       const cwd = getWorkspaceCwd();
-      return runPrompt(
-        apiKey,
-        modelId,
-        `${CONSENSUS_SYSTEM}\n\n${consensusUserPrompt(goal, cwd, proposals)}`,
-        options,
+      const { system, user } = resolveConsensusPrompts(
+        options?.mode,
+        goal,
+        cwd,
+        proposals,
       );
+      return runPrompt(apiKey, modelId, `${system}\n\n${user}`, options);
     },
   };
 }

@@ -1,6 +1,10 @@
+import type { RunMode } from "../pipeline/types.js";
+
 export type ProviderCallOptions = {
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** Defaults to "plan" when omitted. */
+  mode?: RunMode;
 };
 
 export interface ModelProvider {

@@ -1,5 +1,5 @@
 import { useKeyboard, useRenderer } from "@opentui/react";
-import type { Phase, ProposalState } from "../pipeline/types.js";
+import type { Phase, ProposalState, RunMode } from "../pipeline/types.js";
 import { Clickable } from "./Clickable.js";
 import { ConsensusView } from "./ConsensusView.js";
 import { GoalInput } from "./GoalInput.js";
@@ -11,10 +11,13 @@ export type PlanGate = "ready" | "need-models" | "need-auth";
 interface PlanScreenProps {
   phase: Phase;
   gate: PlanGate;
+  mode: RunMode;
+  onModeChange: (mode: RunMode) => void;
   goal: string;
   proposals: ProposalState[];
   consensusStartedAt: number | null;
   planPath: string | null;
+  archivePath: string | null;
   plan: string | null;
   error: string | null;
   failingLabels: string[];
@@ -32,10 +35,13 @@ const DIM = "#888888";
 export function PlanScreen({
   phase,
   gate,
+  mode,
+  onModeChange,
   goal: _goal,
   proposals,
   consensusStartedAt,
   planPath,
+  archivePath,
   plan,
   error,
   failingLabels,
@@ -49,6 +55,7 @@ export function PlanScreen({
 }: PlanScreenProps) {
   const renderer = useRenderer();
   const canResetAuth = failingLabels.length > 0;
+  const anotherLabel = mode === "ask" ? "Ask another" : "Plan another";
 
   useKeyboard((key) => {
     if (phase !== "error") return;
@@ -97,7 +104,7 @@ export function PlanScreen({
           <strong>Plan</strong>
         </text>
         <text fg={DIM}>
-          Select proposers and a consensus model before running a plan.
+          Select proposers and a consensus model before running a plan or ask.
         </text>
         <Clickable onClick={onGoModels}>
           <text fg="cyan">→ Open Proposers tab (or Ctrl+2)</text>
@@ -107,7 +114,13 @@ export function PlanScreen({
   }
 
   if (phase === "idle") {
-    return <GoalInput onSubmit={onSubmitGoal} />;
+    return (
+      <GoalInput
+        mode={mode}
+        onModeChange={onModeChange}
+        onSubmit={onSubmitGoal}
+      />
+    );
   }
 
   if (phase === "proposing") {
@@ -118,7 +131,7 @@ export function PlanScreen({
     return (
       <box flexDirection="column" gap={1}>
         <ProposalList proposals={proposals} />
-        <ConsensusView startedAt={consensusStartedAt} />
+        <ConsensusView mode={mode} startedAt={consensusStartedAt} />
       </box>
     );
   }
@@ -127,15 +140,17 @@ export function PlanScreen({
     return (
       <box flexDirection="column" gap={1}>
         <ProposalList proposals={proposals} />
-        <ConsensusView writing />
+        <ConsensusView mode={mode} writing />
       </box>
     );
   }
 
-  if (phase === "done" && planPath && plan !== null) {
+  if (phase === "done" && plan !== null && archivePath) {
     return (
       <ResultBrowser
+        mode={mode}
         planPath={planPath}
+        archivePath={archivePath}
         plan={plan}
         proposals={proposals}
         onPlanAnother={onPlanAnother}
@@ -153,17 +168,19 @@ export function PlanScreen({
         {proposals.length > 0 ? <ProposalList proposals={proposals} /> : null}
         {canResetAuth ? (
           <text fg={DIM}>
-            Enter retry · Esc plan another · Press r to remove{" "}
+            Enter retry · Esc {anotherLabel.toLowerCase()} · Press r to remove{" "}
             {failingLabels.join(" and ")} and re-enter · q to quit
           </text>
         ) : (
-          <text fg={DIM}>Enter retry · Esc plan another · q to quit</text>
+          <text fg={DIM}>
+            Enter retry · Esc {anotherLabel.toLowerCase()} · q to quit
+          </text>
         )}
         <Clickable onClick={onRetry}>
           <text fg="cyan">→ Retry (or press Enter)</text>
         </Clickable>
         <Clickable onClick={onBackToIdle}>
-          <text fg="cyan">→ Plan another (or press Esc)</text>
+          <text fg="cyan">→ {anotherLabel} (or press Esc)</text>
         </Clickable>
         {canResetAuth ? (
           <Clickable onClick={onResetFailingKeys}>

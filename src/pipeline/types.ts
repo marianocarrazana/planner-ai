@@ -1,3 +1,5 @@
+export type RunMode = "plan" | "ask";
+
 export type Phase =
   | "idle"
   | "proposing"
@@ -19,8 +21,13 @@ export interface ProposalState {
 }
 
 export interface PipelineResult {
-  planPath: string;
+  /** Workspace plan.md path in plan mode; null in ask mode. */
+  planPath: string | null;
+  /** Archive directory under .planner-ai/. */
+  archivePath: string;
+  /** Consensus markdown (plan or answer). */
   plan: string;
+  mode: RunMode;
   proposals: ProposalState[];
 }
 

@@ -9,6 +9,7 @@ import type {
   PipelineCallbacks,
   PipelineResult,
   ProposalState,
+  RunMode,
 } from "./types.js";
 
 export async function runPipeline(
@@ -16,12 +17,15 @@ export async function runPipeline(
   proposers: ModelProvider[],
   consensus: ConsensusProvider,
   callbacks: PipelineCallbacks,
-  options?: ProviderCallOptions,
+  options?: ProviderCallOptions & { mode?: RunMode },
 ): Promise<PipelineResult> {
+  const mode: RunMode = options?.mode ?? "plan";
+  const callOptions: ProviderCallOptions = { ...options, mode };
+
   const trimmed = goal.trim();
   if (!trimmed) {
     callbacks.onPhase("error");
-    throw new Error("Goal is required");
+    throw new Error(mode === "ask" ? "Question is required" : "Goal is required");
   }
 
   let proposals: ProposalState[] = proposers.map((p) => ({
@@ -45,7 +49,7 @@ export async function runPipeline(
 
   const settled = await Promise.allSettled(
     proposers.map(async (provider) => {
-      const body = await provider.propose(trimmed, options);
+      const body = await provider.propose(trimmed, callOptions);
       return { id: provider.id, body };
     }),
   );
@@ -75,17 +79,22 @@ export async function runPipeline(
 
   if (successful.length === 0) {
     callbacks.onPhase("error");
-    throw new Error("All proposals failed");
+    throw new Error(
+      mode === "ask" ? "All answers failed" : "All proposals failed",
+    );
   }
 
   callbacks.onPhase("consensus");
   callbacks.onConsensusStarted?.(Date.now());
-  const plan = await consensus.reconcile(trimmed, successful, options);
+  const plan = await consensus.reconcile(trimmed, successful, callOptions);
 
   callbacks.onPhase("writing");
-  const planPath = await writePlan(plan);
-  await writeRunArchive({ plan, proposals });
+  let planPath: string | null = null;
+  if (mode === "plan") {
+    planPath = await writePlan(plan);
+  }
+  const archivePath = await writeRunArchive({ kind: mode, plan, proposals });
 
   callbacks.onPhase("done");
-  return { planPath, plan, proposals };
+  return { planPath, archivePath, plan, mode, proposals };
 }
