@@ -1,8 +1,11 @@
 name: Publish to PyPI
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+rc[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+[ab][0-9]+"
 
 jobs:
   build:
@@ -21,13 +24,13 @@ jobs:
           enable-cache: false
           python-version: "3.14"
 
-      - name: Check version matches release tag
+      - name: Check version matches tag
         run: |
-          tag="${{ github.event.release.tag_name }}"
+          tag="${{ github.ref_name }}"
           expected="${tag#v}"
           actual="$(uv version --short)"
           if [ "$actual" != "$expected" ]; then
-            echo "pyproject version ($actual) does not match release tag ($tag → $expected)"
+            echo "pyproject version ($actual) does not match tag ($tag → $expected)"
             exit 1
           fi
 
