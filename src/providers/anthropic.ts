@@ -50,7 +50,6 @@ async function runClaude(
         tools: [...READ_TOOLS],
         allowedTools: [...READ_TOOLS],
         permissionMode: "dontAsk",
-        maxTurns: 20,
         env: claudeEnv(token),
         abortController: abort.controller,
       },
