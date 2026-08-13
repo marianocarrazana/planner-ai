@@ -4,9 +4,9 @@ from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import VerticalScroll
 from textual.widget import Widget
-from textual.widgets import Label, Static
+from textual.widgets import Static, Tab, Tabs
 
 from planner_ai.pipeline.types import ProposalState, RunMode
 
@@ -16,29 +16,14 @@ if TYPE_CHECKING:
 PRIMARY_TAB_ID = "primary"
 
 
-class ResultTabLabel(Static):
-    """Clickable inner tab label for ResultBrowser."""
+def _sanitize_tab_id(tab_id: str) -> str:
+    return tab_id.replace(":", "-").replace("/", "-").replace(".", "-")
 
-    def __init__(
-        self,
-        tab_id: str,
-        label: str,
-        *,
-        id: str | None = None,
-        classes: str | None = None,
-    ) -> None:
-        super().__init__(f" {label} ", id=id, classes=classes)
-        self.tab_id = tab_id
-        self.tab_label = label
-        self.can_focus = False
 
-    def on_click(self) -> None:
-        parent = self.parent
-        while parent is not None:
-            if isinstance(parent, ResultBrowser):
-                parent.select_tab(self.tab_id)
-                return
-            parent = parent.parent
+class ResultTabs(Tabs):
+    """Inner result tabs; keyboard focus stays on ResultBrowser."""
+
+    can_focus = False
 
 
 class PlanAnotherLink(Static):
@@ -77,27 +62,9 @@ class ResultBrowser(Widget):
         display: none;
     }
 
-    ResultBrowser #rb-tab-row {
-        height: 1;
-        layout: horizontal;
+    ResultBrowser ResultTabs {
+        height: auto;
         width: 100%;
-    }
-
-    ResultBrowser ResultTabLabel {
-        width: auto;
-        height: 1;
-        margin-right: 2;
-        color: #888888;
-    }
-
-    ResultBrowser ResultTabLabel.-active {
-        color: black;
-        background: cyan;
-    }
-
-    ResultBrowser #rb-tab-underline {
-        height: 1;
-        color: cyan;
     }
 
     ResultBrowser #rb-path {
@@ -129,11 +96,6 @@ class ResultBrowser(Widget):
     ResultBrowser #rb-another.-hidden {
         display: none;
     }
-
-    ResultBrowser #rb-hints {
-        color: #888888;
-        height: auto;
-    }
     """
 
     BINDINGS = [
@@ -141,8 +103,8 @@ class ResultBrowser(Widget):
         Binding("enter", "exit", show=False),
         Binding("q", "exit", show=False),
         Binding("escape", "exit", show=False),
-        Binding("left", "prev_tab", show=False),
-        Binding("right", "next_tab", show=False),
+        Binding("left", "prev_tab", "Prev tab"),
+        Binding("right", "next_tab", "Next tab"),
         Binding("left_square_bracket", "prev_tab", show=False),
         Binding("right_square_bracket", "next_tab", show=False),
         Binding("up", "scroll_up", show=False),
@@ -170,7 +132,24 @@ class ResultBrowser(Widget):
         self._on_exit = False
         self._active_tab: str = PRIMARY_TAB_ID
         self._tabs: list[tuple[str, str]] = [(PRIMARY_TAB_ID, "Plan")]
+        self._widget_to_logical: dict[str, str] = {}
         self._remount_token = 0
+        self._syncing_rb_tabs = False
+        self._rebuild_widget_map()
+
+    def _id_prefix(self) -> str:
+        return self.id or "rb"
+
+    def _tab_widget_id(self, tab_id: str) -> str:
+        return f"{self._id_prefix()}-tab-{_sanitize_tab_id(tab_id)}"
+
+    def _tabs_widget_id(self) -> str:
+        return f"{self._id_prefix()}-tabs"
+
+    def _rebuild_widget_map(self) -> None:
+        self._widget_to_logical = {
+            self._tab_widget_id(tab_id): tab_id for tab_id, _ in self._tabs
+        }
 
     @property
     def planner_app(self) -> PlannerApp:
@@ -179,18 +158,14 @@ class ResultBrowser(Widget):
     def compose(self) -> ComposeResult:
         yield Static("Plan ready", id="rb-heading")
         yield Static("", id="rb-errors", classes="-hidden")
-        with Vertical(id="rb-tabs"):
-            with Horizontal(id="rb-tab-row"):
-                yield ResultTabLabel(PRIMARY_TAB_ID, "Plan", id="rb-tab-primary")
-            yield Label("", id="rb-tab-underline")
+        yield ResultTabs(
+            Tab("Plan", id=self._tab_widget_id(PRIMARY_TAB_ID)),
+            id=self._tabs_widget_id(),
+        )
         yield Static("", id="rb-path")
         with VerticalScroll(id="rb-body"):
             yield Static("", id="rb-body-text")
         yield PlanAnotherLink("→ Plan another (or press n)", id="rb-another")
-        yield Static(
-            "←→/[ ] tabs · ↑↓/wheel/PgUp/PgDn scroll · n plan another · Enter or q exit",
-            id="rb-hints",
-        )
 
     def sync(
         self,
@@ -217,6 +192,7 @@ class ResultBrowser(Widget):
         self._tabs = [(PRIMARY_TAB_ID, primary_label)]
         for proposal in self._proposals:
             self._tabs.append((proposal.id, proposal.label))
+        self._rebuild_widget_map()
 
         if title is not None:
             heading = title
@@ -248,18 +224,6 @@ class ResultBrowser(Widget):
             another.update(f"→ {another_label} (or press n)")
             another.remove_class("-hidden")
 
-        if on_exit:
-            hints = "←→/[ ] tabs · ↑↓/wheel/PgUp/PgDn scroll · Esc/Enter/q back"
-        else:
-            another_lower = (
-                "ask another" if is_ask else "plan another"
-            )
-            hints = (
-                f"←→/[ ] tabs · ↑↓/wheel/PgUp/PgDn scroll · "
-                f"n {another_lower} · Enter or q exit"
-            )
-        self.query_one("#rb-hints", Static).update(hints)
-
         self._remount_tabs()
         self._refresh_body()
 
@@ -273,54 +237,49 @@ class ResultBrowser(Widget):
         )
 
     async def _remount_tabs_async(self, token: int) -> None:
-        row = self.query_one("#rb-tab-row", Horizontal)
-        await row.remove_children()
-        if token != self._remount_token:
-            return
-        widgets: list[ResultTabLabel] = []
-        for tab_id, label in self._tabs:
-            safe = (
-                tab_id.replace(":", "-")
-                .replace("/", "-")
-                .replace(".", "-")
-            )
-            widgets.append(
-                ResultTabLabel(
-                    tab_id,
-                    label,
-                    id=f"rb-tab-{safe}",
-                    classes="-active" if tab_id == self._active_tab else None,
-                )
-            )
-        if widgets:
-            await row.mount(*widgets)
-        if token != self._remount_token:
-            return
-        self._refresh_tab_styles()
+        tabs = self.query_one(ResultTabs)
+        self._syncing_rb_tabs = True
+        try:
+            await tabs.clear()
+            if token != self._remount_token:
+                return
+            for tab_id, label in self._tabs:
+                await tabs.add_tab(Tab(label, id=self._tab_widget_id(tab_id)))
+                if token != self._remount_token:
+                    return
+            desired = self._tab_widget_id(self._active_tab)
+            if self._tabs and tabs.active != desired:
+                tabs.active = desired
+        finally:
+            self._syncing_rb_tabs = False
 
-    def _refresh_tab_styles(self) -> None:
-        for label in self.query(ResultTabLabel):
-            label.set_class(label.tab_id == self._active_tab, "-active")
-
-        underline = self.query_one("#rb-tab-underline", Label)
-        parts: list[str] = []
-        for i, (_tab_id, label) in enumerate(self._tabs):
-            if i > 0:
-                parts.append("  ")
-            width = len(label) + 2
-            if _tab_id == self._active_tab:
-                parts.append("▬" * width)
-            else:
-                parts.append(" " * width)
-        underline.update("".join(parts))
+    def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
+        if not isinstance(event.tabs, ResultTabs):
+            return
+        event.stop()
+        if self._syncing_rb_tabs:
+            return
+        if event.tab is None or event.tab.id is None:
+            return
+        logical = self._widget_to_logical.get(event.tab.id)
+        if logical is None:
+            return
+        self._apply_tab(logical)
 
     def select_tab(self, tab_id: str) -> None:
-        if tab_id == self._active_tab:
-            return
         if not any(t[0] == tab_id for t in self._tabs):
             return
+        tabs = self.query_one(ResultTabs)
+        widget_id = self._tab_widget_id(tab_id)
+        if tabs.active == widget_id and self._active_tab == tab_id:
+            return
+        if tabs.active != widget_id:
+            tabs.active = widget_id
+        else:
+            self._apply_tab(tab_id)
+
+    def _apply_tab(self, tab_id: str) -> None:
         self._active_tab = tab_id
-        self._refresh_tab_styles()
         self._refresh_body()
         body = self.query_one("#rb-body", VerticalScroll)
         body.scroll_home(animate=False)

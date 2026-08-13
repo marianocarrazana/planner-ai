@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from textual.widgets import Footer
+
 from planner_ai import config as config_mod
 from planner_ai.app import (
     PlannerApp,
@@ -107,7 +109,9 @@ def test_ctrl_tabs_and_click(config_home: Path, monkeypatch: pytest.MonkeyPatch)
 
             await pilot.click("#tab-plan")
             assert app.active_tab == "plan"
-            assert app.query_one(AppTabs).active == "plan"
+            assert app.query_one("#app-tabs", AppTabs).active == "tab-plan"
+
+            assert app.query_one(Footer) is not None
 
             assert "config:" in str(app.query_one("#header-sources").render())
             assert "Loading config" not in str(

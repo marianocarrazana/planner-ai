@@ -12,9 +12,9 @@ from planner_ai.config import save_config
 from planner_ai.pipeline.types import ProposalState
 from planner_ai.providers.models import ModelSelection
 from planner_ai.ui.history_screen import HistoryRow, HistoryScreen
-from planner_ai.ui.result_browser import ResultBrowser, ResultTabLabel
+from planner_ai.ui.result_browser import ResultBrowser
 from planner_ai.write_run_archive import ARCHIVE_DIR, write_run_archive
-from textual.widgets import ContentSwitcher, Static
+from textual.widgets import ContentSwitcher, Static, Tab
 
 FIXED = datetime(2026, 8, 13, 16, 48, 0)
 LATER = datetime(2026, 8, 13, 16, 49, 0)
@@ -186,7 +186,7 @@ def test_history_open_ask_shows_answer_tab(
             heading = str(rb.query_one("#rb-heading").render())
             assert "Archived" in heading
             assert "ask" in heading
-            labels = [t.tab_label for t in rb.query(ResultTabLabel)]
+            labels = [t.label_text for t in rb.query(Tab)]
             assert "Answer" in labels
             body = str(rb.query_one("#rb-body-text").render())
             assert "consensus answer" in body
@@ -342,7 +342,7 @@ def test_history_typescript_shaped_fixture(
                     break
                 await pilot.pause()
             rb = hist.query_one("#hist-result-browser", ResultBrowser)
-            assert "Answer" in [t.tab_label for t in rb.query(ResultTabLabel)]
+            assert "Answer" in [t.label_text for t in rb.query(Tab)]
             assert "Consensus answer" in str(rb.query_one("#rb-body-text").render())
             rb.focus()
             await pilot.press("right")

@@ -3,7 +3,7 @@ from __future__ import annotations
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
-from textual.widgets import ContentSwitcher, Static
+from textual.widgets import ContentSwitcher, Footer, Static, Tabs
 
 from planner_ai.config import (
     AppConfig,
@@ -30,7 +30,13 @@ from planner_ai.ui.history_screen import HistoryScreen
 from planner_ai.ui.model_select import ModelSelect
 from planner_ai.ui.plan_helpers import has_any_real_credential, plan_gate
 from planner_ai.ui.plan_screen import PlanScreen
-from planner_ai.ui.tabs import TABS, AppTab, AppTabs, TabSelected
+from planner_ai.ui.tabs import (
+    TABS,
+    AppTab,
+    AppTabs,
+    app_tab_widget_id,
+    parse_app_tab_id,
+)
 from planner_ai.workspace import get_workspace_cwd
 
 
@@ -70,7 +76,7 @@ class PlannerApp(App[None]):
     CSS = """
     Screen {
         layout: vertical;
-        padding: 1;
+        padding: 1 1 0 1;
     }
 
     #header {
@@ -84,8 +90,7 @@ class PlannerApp(App[None]):
 
     #header-cwd,
     #header-sources,
-    #header-goal,
-    #header-tabs-hint {
+    #header-goal {
         color: #888888;
     }
 
@@ -120,11 +125,11 @@ class PlannerApp(App[None]):
     """
 
     BINDINGS = [
-        Binding("ctrl+1", "go_tab_plan", "Plan", show=False, priority=True),
-        Binding("ctrl+2", "go_tab_proposers", "Proposers", show=False, priority=True),
-        Binding("ctrl+3", "go_tab_consensus", "Consensus", show=False, priority=True),
-        Binding("ctrl+4", "go_tab_auth", "Auth", show=False, priority=True),
-        Binding("ctrl+5", "go_tab_history", "History", show=False, priority=True),
+        Binding("ctrl+1", "go_tab_plan", "Plan", priority=True),
+        Binding("ctrl+2", "go_tab_proposers", "Proposers", priority=True),
+        Binding("ctrl+3", "go_tab_consensus", "Consensus", priority=True),
+        Binding("ctrl+4", "go_tab_auth", "Auth", priority=True),
+        Binding("ctrl+5", "go_tab_history", "History", priority=True),
     ]
 
     def __init__(self) -> None:
@@ -146,6 +151,7 @@ class PlannerApp(App[None]):
         self.error: str | None = None
         self.failing_keys: list[ConfigCredentialKey] = []
         self.loading_choices = False
+        self._syncing_app_tabs = False
 
     def compose(self) -> ComposeResult:
         with Vertical(id="header"):
@@ -153,11 +159,6 @@ class PlannerApp(App[None]):
             yield Static("", id="header-cwd")
             yield Static("", id="header-sources")
             yield Static("", id="header-goal", classes="-hidden")
-            yield Static(
-                "Tabs: click or Ctrl+1 Plan · Ctrl+2 Proposers · Ctrl+3 Consensus · "
-                "Ctrl+4 Auth · Ctrl+5 History",
-                id="header-tabs-hint",
-            )
         yield AppTabs()
         yield Static("Loading config…", id="loading-config")
         with ContentSwitcher(id="tab-body", initial="plan"):
@@ -174,6 +175,7 @@ class PlannerApp(App[None]):
                     yield HistoryScreen(id="history")
                 else:
                     yield Static(label, id=tab_id, classes="placeholder-pane")
+        yield Footer(show_command_palette=False, compact=True)
 
     async def on_mount(self) -> None:
         self._refresh_header()
@@ -238,10 +240,17 @@ class PlannerApp(App[None]):
             failing_labels=self._failing_labels(),
         )
 
-    def go_tab(self, tab: AppTab) -> None:
+    def go_tab(self, tab: AppTab, *, tabs: AppTabs | None = None) -> None:
         previous = self.active_tab
         self.active_tab = tab
-        self.query_one(AppTabs).active = tab
+        app_tabs = tabs if tabs is not None else self.query_one("#app-tabs", AppTabs)
+        widget_id = app_tab_widget_id(tab)
+        if app_tabs.active != widget_id:
+            self._syncing_app_tabs = True
+            try:
+                app_tabs.active = widget_id
+            finally:
+                self._syncing_app_tabs = False
         self.query_one("#tab-body", ContentSwitcher).current = tab
         if tab == "plan":
             self._sync_plan_screen()
@@ -274,8 +283,17 @@ class PlannerApp(App[None]):
     def action_go_tab_history(self) -> None:
         self.go_tab("history")
 
-    def on_tab_selected(self, event: TabSelected) -> None:
-        self.go_tab(event.tab)
+    def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
+        if self._syncing_app_tabs:
+            return
+        if not isinstance(event.tabs, AppTabs):
+            return
+        if event.tab is None:
+            return
+        tab = parse_app_tab_id(event.tab.id)
+        if tab is None:
+            return
+        self.go_tab(tab, tabs=event.tabs)
 
     def on_draft_selection_change(self, selection: ModelSelection) -> None:
         self.draft_selection = selection

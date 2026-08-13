@@ -80,7 +80,6 @@ class AuthScreen(Widget):
     }
 
     AuthScreen #auth-hint,
-    AuthScreen #auth-footer,
     AuthScreen #auth-back {
         color: #888888;
         height: auto;
@@ -130,7 +129,7 @@ class AuthScreen(Widget):
     BINDINGS = [
         Binding("up", "move_up", show=False),
         Binding("down", "move_down", show=False),
-        Binding("enter", "activate", show=False),
+        Binding("enter", "activate", "Activate"),
         Binding("space", "activate", show=False),
     ]
 
@@ -166,10 +165,6 @@ class AuthScreen(Widget):
                 with Vertical(id="auth-actions"):
                     for i in range(7):
                         yield AuthActionRow(i, "", id=f"auth-action-{i}")
-                yield Static(
-                    "↑↓ move · Enter/Space activate · Ctrl+1–5 switch tabs",
-                    id="auth-footer",
-                )
             with Vertical(id="editor"):
                 yield TokenInput(id="auth-token-input")
                 yield Static("← Back to Auth overview", id="auth-back")

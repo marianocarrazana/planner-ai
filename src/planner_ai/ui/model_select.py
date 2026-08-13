@@ -238,7 +238,6 @@ class ModelSelect(Widget):
     }
 
     ModelSelect #ms-help,
-    ModelSelect #ms-footer,
     ModelSelect #ms-empty,
     ModelSelect #ms-filter-hint {
         color: #888888;
@@ -265,8 +264,7 @@ class ModelSelect(Widget):
     ModelSelect #ms-filter-hint.-hidden,
     ModelSelect #ms-list.-hidden,
     ModelSelect #ms-empty.-hidden,
-    ModelSelect #ms-continue.-hidden,
-    ModelSelect #ms-footer.-hidden {
+    ModelSelect #ms-continue.-hidden {
         display: none;
     }
 
@@ -332,10 +330,10 @@ class ModelSelect(Widget):
         Binding("pagedown", "page_down", show=False),
         Binding("enter", "activate", show=False),
         Binding("space", "activate", show=False),
-        Binding("slash", "start_filter", show=False),
-        Binding("escape", "clear_filter", show=False),
-        Binding("m", "toggle_mocks", show=False),
-        Binding("c", "continue", show=False),
+        Binding("slash", "start_filter", "Filter", key_display="/"),
+        Binding("escape", "clear_filter", "Clear filter"),
+        Binding("m", "toggle_mocks", "Toggle mocks"),
+        Binding("c", "continue", "Continue"),
     ]
 
     can_focus = True
@@ -380,7 +378,6 @@ class ModelSelect(Widget):
         with VerticalScroll(id="ms-list", classes="-hidden"):
             pass
         yield ContinueRow(id="ms-continue", classes="-hidden")
-        yield Static("", id="ms-footer", classes="-hidden")
 
     def sync(
         self,
@@ -428,14 +425,12 @@ class ModelSelect(Widget):
         empty = self.query_one("#ms-empty", Static)
         list_widget = self.query_one("#ms-list", VerticalScroll)
         continue_row = self.query_one("#ms-continue", ContinueRow)
-        footer = self.query_one("#ms-footer", Static)
 
         if self._loading:
             empty.update("Loading models…")
             empty.remove_class("-hidden")
             list_widget.add_class("-hidden")
             continue_row.add_class("-hidden")
-            footer.add_class("-hidden")
             self._update_chrome()
             return
 
@@ -444,14 +439,12 @@ class ModelSelect(Widget):
             empty.remove_class("-hidden")
             list_widget.add_class("-hidden")
             continue_row.add_class("-hidden")
-            footer.add_class("-hidden")
             self._update_chrome()
             return
 
         empty.add_class("-hidden")
         list_widget.remove_class("-hidden")
         continue_row.remove_class("-hidden")
-        footer.remove_class("-hidden")
 
         filtered = self._filtered_choices()
         self._display_rows = build_display_rows(filtered)
@@ -504,7 +497,6 @@ class ModelSelect(Widget):
     def _update_chrome(self) -> None:
         title = self.query_one("#ms-title", Static)
         help_w = self.query_one("#ms-help", Static)
-        footer = self.query_one("#ms-footer", Static)
 
         scroll_hint = ""
         list_height = self._list_height()
@@ -514,12 +506,13 @@ class ModelSelect(Widget):
             end = min(n, start + list_height)
             scroll_hint = f" · showing {start + 1}–{end} of {n}"
 
+        mocks_hint = "mocks on" if self._include_mocks else "mocks off"
         if self.mode == "proposers":
             count = (
                 len(self._selection["proposers"]) if self._selection is not None else 0
             )
             title.update(f"Proposers ({count} selected){scroll_hint}")
-            help_w.update("Multi-select — Space/click to toggle")
+            help_w.update(f"Multi-select — Space/click to toggle · {mocks_hint}")
         else:
             if self._selection is not None:
                 consensus = self._selection["consensus"]
@@ -540,12 +533,7 @@ class ModelSelect(Widget):
             else:
                 label = "—"
             title.update(f"Consensus ({label}){scroll_hint}")
-            help_w.update("Single-select — Space/click to choose")
-
-        mocks_hint = "mocks on" if self._include_mocks else "mocks off"
-        footer.update(
-            f"↑↓ scroll · / filter · m {mocks_hint} · Esc clear · c continue"
-        )
+            help_w.update(f"Single-select — Space/click to choose · {mocks_hint}")
 
     def _update_continue(self) -> None:
         row = self.query_one("#ms-continue", ContinueRow)

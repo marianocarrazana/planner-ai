@@ -11,8 +11,8 @@ from planner_ai.config import save_config
 from planner_ai.pipeline.types import ProposalState
 from planner_ai.providers.models import ModelSelection
 from planner_ai.providers.resolve import ResolvedProviders
-from planner_ai.ui.result_browser import PRIMARY_TAB_ID, ResultBrowser, ResultTabLabel
-from textual.widgets import ContentSwitcher, Input, Static
+from planner_ai.ui.result_browser import PRIMARY_TAB_ID, ResultBrowser
+from textual.widgets import ContentSwitcher, Input, Static, Tab
 
 
 @pytest.fixture
@@ -111,7 +111,7 @@ def test_plan_result_browser_tabs(
             assert "Plan ready" in str(rb.query_one("#rb-heading").render())
             assert rb._active_tab == PRIMARY_TAB_ID
 
-            labels = [t.tab_label for t in rb.query(ResultTabLabel)]
+            labels = [t.label_text for t in rb.query(Tab)]
             assert "Plan" in labels
             assert any("Alpha" in label or "alpha" in label.lower() for label in labels)
 
@@ -151,7 +151,7 @@ def test_ask_result_browser_answer_tab(
 
             rb = app.query_one("#result-browser", ResultBrowser)
             assert "Answer ready" in str(rb.query_one("#rb-heading").render())
-            labels = [t.tab_label for t in rb.query(ResultTabLabel)]
+            labels = [t.label_text for t in rb.query(Tab)]
             assert "Answer" in labels
             assert "Plan" not in labels
 

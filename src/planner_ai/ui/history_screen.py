@@ -88,8 +88,7 @@ class HistoryScreen(Widget):
 
     HistoryScreen #hist-subtitle,
     HistoryScreen #hist-loading-msg,
-    HistoryScreen #hist-empty,
-    HistoryScreen #hist-footer {
+    HistoryScreen #hist-empty {
         color: #888888;
         height: auto;
     }
@@ -145,9 +144,9 @@ class HistoryScreen(Widget):
         Binding("down", "move_down", show=False),
         Binding("pageup", "page_up", show=False),
         Binding("pagedown", "page_down", show=False),
-        Binding("enter", "activate", show=False),
+        Binding("enter", "activate", "Open"),
         Binding("space", "activate", show=False),
-        Binding("r", "reload", show=False),
+        Binding("r", "reload", "Refresh"),
         Binding("escape", "error_back", show=False),
         Binding("q", "error_back", show=False),
     ]
@@ -188,10 +187,6 @@ class HistoryScreen(Widget):
                 )
                 with VerticalScroll(id="hist-rows", classes="-hidden"):
                     pass
-                yield Static(
-                    "r refresh · Ctrl+1–5 switch tabs",
-                    id="hist-footer",
-                )
             with Vertical(id="hist-loading"):
                 yield Static("History", id="hist-loading-title")
                 yield Static("", id="hist-loading-msg")
@@ -375,7 +370,6 @@ class HistoryScreen(Widget):
         empty = self.query_one("#hist-empty", Static)
         list_error = self.query_one("#hist-list-error", Static)
         rows = self.query_one("#hist-rows", VerticalScroll)
-        footer = self.query_one("#hist-footer", Static)
 
         n = len(self._runs)
         if n > 0:
@@ -405,13 +399,6 @@ class HistoryScreen(Widget):
             empty.add_class("-hidden")
             list_error.add_class("-hidden")
             rows.remove_class("-hidden")
-
-        if n == 0:
-            footer.update("r refresh · Ctrl+1–5 switch tabs")
-        else:
-            footer.update(
-                "↑↓/wheel/PgUp/PgDn · Enter open · r refresh · Ctrl+1–5 tabs"
-            )
 
     def watch_cursor(self, _cursor: int) -> None:
         if self._view != "list":
