@@ -131,6 +131,13 @@ class PlannerApp(App[None]):
         Binding("ctrl+3", "go_tab_consensus", "Consensus", priority=True),
         Binding("ctrl+4", "go_tab_auth", "Auth", priority=True),
         Binding("ctrl+5", "go_tab_history", "History", priority=True),
+        Binding(
+            "ctrl+q",
+            "quit",
+            "Quit",
+            tooltip="Quit the app and return to the command prompt.",
+            priority=True,
+        ),
     ]
 
     def __init__(self) -> None:

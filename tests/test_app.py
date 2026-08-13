@@ -112,9 +112,33 @@ def test_ctrl_tabs_and_click(config_home: Path, monkeypatch: pytest.MonkeyPatch)
             assert app.query_one("#app-tabs", AppTabs).active == "tab-plan"
 
             assert app.query_one(Footer) is not None
+            quit_keys = [
+                key
+                for key in app.query("FooterKey")
+                if getattr(key, "description", None) == "Quit"
+            ]
+            assert len(quit_keys) == 1
 
             assert "config:" in str(app.query_one("#header-sources").render())
             assert "-hidden" in app.query_one("#loading-config").classes
+
+    asyncio.run(run())
+
+
+def test_ctrl_q_quits(config_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_choices(_creds, _opts=None):
+        return list(MOCK_MODELS)
+
+    monkeypatch.setattr("planner_ai.app.available_choices", fake_choices)
+    monkeypatch.setattr("planner_ai.app.load_config", lambda: {})
+
+    async def run() -> None:
+        app = PlannerApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("ctrl+q")
+            await pilot.pause()
+            assert not app.is_running
 
     asyncio.run(run())
 
