@@ -1,4 +1,4 @@
-# planner-ai (Python)
+# Planner AI
 
 Terminal UI that asks several models for a plan or answer in parallel, reconciles via a consensus model, and either writes `plan.md` (Plan mode) or returns a Q&A answer (Ask mode). It plans and answers; it does not execute.
 
