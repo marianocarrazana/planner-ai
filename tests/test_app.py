@@ -114,9 +114,7 @@ def test_ctrl_tabs_and_click(config_home: Path, monkeypatch: pytest.MonkeyPatch)
             assert app.query_one(Footer) is not None
 
             assert "config:" in str(app.query_one("#header-sources").render())
-            assert "Loading config" not in str(
-                app.query_one("#loading-config").render()
-            ) or "-hidden" in app.query_one("#loading-config").classes
+            assert "-hidden" in app.query_one("#loading-config").classes
 
     asyncio.run(run())
 

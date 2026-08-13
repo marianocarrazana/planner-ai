@@ -6,7 +6,8 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
 from textual.widget import Widget
-from textual.widgets import Static, Tab, Tabs
+from textual import on
+from textual.widgets import Button, Markdown, Static, Tab, Tabs
 
 from planner_ai.pipeline.types import ProposalState, RunMode
 
@@ -16,26 +17,10 @@ if TYPE_CHECKING:
 PRIMARY_TAB_ID = "primary"
 
 
-def _sanitize_tab_id(tab_id: str) -> str:
-    return tab_id.replace(":", "-").replace("/", "-").replace(".", "-")
-
-
 class ResultTabs(Tabs):
     """Inner result tabs; keyboard focus stays on ResultBrowser."""
 
     can_focus = False
-
-
-class PlanAnotherLink(Static):
-    """Clickable Plan/Ask another action."""
-
-    def on_click(self) -> None:
-        parent = self.parent
-        while parent is not None:
-            if isinstance(parent, ResultBrowser):
-                parent.action_plan_another()
-                return
-            parent = parent.parent
 
 
 class ResultBrowser(Widget):
@@ -82,14 +67,19 @@ class ResultBrowser(Widget):
         border: none;
     }
 
-    ResultBrowser #rb-body-text {
+    ResultBrowser #rb-body-markdown {
         height: auto;
         width: 100%;
     }
 
     ResultBrowser #rb-another {
         color: cyan;
-        height: 1;
+        background: transparent;
+        border: none;
+        width: auto;
+        min-width: 0;
+        height: 3;
+        padding: 0;
         margin-top: 1;
     }
 
@@ -133,23 +123,12 @@ class ResultBrowser(Widget):
         self._active_tab: str = PRIMARY_TAB_ID
         self._tabs: list[tuple[str, str]] = [(PRIMARY_TAB_ID, "Plan")]
         self._widget_to_logical: dict[str, str] = {}
+        self._logical_to_widget: dict[str, str] = {}
         self._remount_token = 0
         self._syncing_rb_tabs = False
-        self._rebuild_widget_map()
-
-    def _id_prefix(self) -> str:
-        return self.id or "rb"
-
-    def _tab_widget_id(self, tab_id: str) -> str:
-        return f"{self._id_prefix()}-tab-{_sanitize_tab_id(tab_id)}"
 
     def _tabs_widget_id(self) -> str:
-        return f"{self._id_prefix()}-tabs"
-
-    def _rebuild_widget_map(self) -> None:
-        self._widget_to_logical = {
-            self._tab_widget_id(tab_id): tab_id for tab_id, _ in self._tabs
-        }
+        return f"{(self.id or 'rb')}-tabs"
 
     @property
     def planner_app(self) -> PlannerApp:
@@ -158,14 +137,12 @@ class ResultBrowser(Widget):
     def compose(self) -> ComposeResult:
         yield Static("Plan ready", id="rb-heading")
         yield Static("", id="rb-errors", classes="-hidden")
-        yield ResultTabs(
-            Tab("Plan", id=self._tab_widget_id(PRIMARY_TAB_ID)),
-            id=self._tabs_widget_id(),
-        )
+        # Empty until sync(); auto-generated Tab ids avoid clear/re-add id clashes.
+        yield ResultTabs(id=self._tabs_widget_id())
         yield Static("", id="rb-path")
         with VerticalScroll(id="rb-body"):
-            yield Static("", id="rb-body-text")
-        yield PlanAnotherLink("→ Plan another (or press n)", id="rb-another")
+            yield Markdown("", id="rb-body-markdown", open_links=False)
+        yield Button("→ Plan another (or press n)", id="rb-another", flat=True)
 
     def sync(
         self,
@@ -192,7 +169,6 @@ class ResultBrowser(Widget):
         self._tabs = [(PRIMARY_TAB_ID, primary_label)]
         for proposal in self._proposals:
             self._tabs.append((proposal.id, proposal.label))
-        self._rebuild_widget_map()
 
         if title is not None:
             heading = title
@@ -216,12 +192,12 @@ class ResultBrowser(Widget):
             errors.update("")
             errors.add_class("-hidden")
 
-        another = self.query_one("#rb-another", PlanAnotherLink)
+        another = self.query_one("#rb-another", Button)
         if on_exit:
             another.add_class("-hidden")
         else:
             another_label = "Ask another" if is_ask else "Plan another"
-            another.update(f"→ {another_label} (or press n)")
+            another.label = f"→ {another_label} (or press n)"
             another.remove_class("-hidden")
 
         self._remount_tabs()
@@ -237,19 +213,36 @@ class ResultBrowser(Widget):
         )
 
     async def _remount_tabs_async(self, token: int) -> None:
-        tabs = self.query_one(ResultTabs)
         self._syncing_rb_tabs = True
         try:
-            await tabs.clear()
+            old = self.query_one(ResultTabs)
+            prefix = f"{(self.id or 'rb')}-t{token}"
+            widget_to_logical: dict[str, str] = {}
+            logical_to_widget: dict[str, str] = {}
+            tab_widgets: list[Tab] = []
+            active_widget_id: str | None = None
+            for index, (tab_id, label) in enumerate(self._tabs):
+                widget_id = f"{prefix}-{index}"
+                tab_widgets.append(Tab(label, id=widget_id))
+                widget_to_logical[widget_id] = tab_id
+                logical_to_widget[tab_id] = widget_id
+                if tab_id == self._active_tab:
+                    active_widget_id = widget_id
+            # Replace the whole Tabs widget: clear()+add_tab can race with
+            # ContentSwitcher pruning and leave mounts with an empty await list.
+            new_tabs = ResultTabs(
+                *tab_widgets,
+                active=active_widget_id,
+                id=f"{prefix}-tabs",
+            )
+            await old.remove()
             if token != self._remount_token:
                 return
-            for tab_id, label in self._tabs:
-                await tabs.add_tab(Tab(label, id=self._tab_widget_id(tab_id)))
-                if token != self._remount_token:
-                    return
-            desired = self._tab_widget_id(self._active_tab)
-            if self._tabs and tabs.active != desired:
-                tabs.active = desired
+            await self.mount(new_tabs, after="#rb-errors")
+            if token != self._remount_token:
+                return
+            self._widget_to_logical = widget_to_logical
+            self._logical_to_widget = logical_to_widget
         finally:
             self._syncing_rb_tabs = False
 
@@ -261,6 +254,9 @@ class ResultBrowser(Widget):
             return
         if event.tab is None or event.tab.id is None:
             return
+        # Ignore stale activations superseded by a newer active tab / teardown.
+        if event.tabs.active != event.tab.id:
+            return
         logical = self._widget_to_logical.get(event.tab.id)
         if logical is None:
             return
@@ -270,7 +266,10 @@ class ResultBrowser(Widget):
         if not any(t[0] == tab_id for t in self._tabs):
             return
         tabs = self.query_one(ResultTabs)
-        widget_id = self._tab_widget_id(tab_id)
+        widget_id = self._logical_to_widget.get(tab_id)
+        if widget_id is None:
+            self._apply_tab(tab_id)
+            return
         if tabs.active == widget_id and self._active_tab == tab_id:
             return
         if tabs.active != widget_id:
@@ -319,7 +318,7 @@ class ResultBrowser(Widget):
             body = proposal.body if proposal is not None else None
             body_text = body if body else "(empty)"
 
-        self.query_one("#rb-body-text", Static).update(body_text)
+        self.query_one("#rb-body-markdown", Markdown).update(body_text)
 
     def _move_tab(self, delta: int) -> None:
         if not self._tabs:
@@ -354,6 +353,11 @@ class ResultBrowser(Widget):
         if self._on_exit:
             return
         self.planner_app.plan_another()
+
+    @on(Button.Pressed, "#rb-another")
+    def on_another_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        self.action_plan_another()
 
     def action_exit(self) -> None:
         if self._on_exit:

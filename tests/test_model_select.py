@@ -10,8 +10,6 @@ from planner_ai.app import PlannerApp
 from planner_ai.config import load_config, save_config
 from planner_ai.providers.models import MOCK_MODELS, ModelChoice, ModelSelection
 from planner_ai.ui.model_select import (
-    ContinueRow,
-    ModelChoiceRow,
     ModelSelect,
     build_display_rows,
     choice_matches_query,
@@ -21,7 +19,7 @@ from planner_ai.ui.model_select import (
     snap_to_choice_row,
     toggle_proposer,
 )
-
+from textual.widgets import Button
 
 @pytest.fixture
 def config_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -152,8 +150,8 @@ def test_cannot_continue_with_zero_proposers(
             }
             app.on_draft_selection_change(empty)
             await pilot.pause()
-            continue_row = ms.query_one("#ms-continue", ContinueRow)
-            assert "select ≥1 proposer" in str(continue_row.render())
+            continue_button = ms.query_one("#ms-continue", Button)
+            assert "select ≥1 proposer" in str(continue_button.label)
             await pilot.press("c")
             await pilot.pause()
             assert app.active_tab == "proposers"
@@ -336,7 +334,7 @@ def test_restart_lands_on_plan_with_sources(
     asyncio.run(run())
 
 
-def test_click_choice_row_toggles_proposer(
+def test_activate_choice_toggles_proposer(
     config_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _fake_choices_honoring_mocks(monkeypatch)
@@ -348,24 +346,24 @@ def test_click_choice_row_toggles_proposer(
             await pilot.pause()
             await pilot.press("ctrl+2")
             await pilot.pause()
-            # Wait for list remount worker
-            for _ in range(20):
-                rows = list(app.query_one("#proposers", ModelSelect).query(ModelChoiceRow))
-                if rows:
-                    break
-                await pilot.pause()
             assert app.draft_selection is not None
             before = {pick_key(p) for p in app.draft_selection["proposers"]}
-            rows = list(app.query_one("#proposers", ModelSelect).query(ModelChoiceRow))
-            target = None
-            for row in rows:
-                if pick_key(row.choice) not in before:
-                    target = row
+            ms = app.query_one("#proposers", ModelSelect)
+            target_index = None
+            target_choice = None
+            for index, row in enumerate(ms._display_rows):
+                if row["kind"] == "choice" and pick_key(row["choice"]) not in before:
+                    target_index = index
+                    target_choice = row["choice"]
                     break
-            if target is None:
-                target = rows[0]
-            key = pick_key(target.choice)
-            await pilot.click(target)
+            if target_index is None:
+                target_index = first_choice_row_index(ms._display_rows)
+                row = ms._display_rows[target_index]
+                assert row["kind"] == "choice"
+                target_choice = row["choice"]
+            assert target_choice is not None
+            key = pick_key(target_choice)
+            ms.activate_choice(target_index)
             await pilot.pause()
             after = {pick_key(p) for p in app.draft_selection["proposers"]}
             if key in before:

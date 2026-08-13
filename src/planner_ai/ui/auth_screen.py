@@ -4,12 +4,11 @@ from typing import TYPE_CHECKING, Literal
 
 from textual import on
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Vertical
-from textual.events import Click
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import ContentSwitcher, Static
+from textual.widgets import Button, ContentSwitcher, OptionList, Static
+from textual.widgets.option_list import Option
 
 from planner_ai.config import AppConfig, ConfigCredentialKey
 from planner_ai.ui.token_input import TokenInput
@@ -18,133 +17,33 @@ if TYPE_CHECKING:
     from planner_ai.app import PlannerApp
 
 AuthMode = Literal["overview", "claude", "cursor", "codex"]
-
-ALL_CREDENTIAL_KEYS: list[ConfigCredentialKey] = [
-    "claudeCodeOAuthToken",
-    "cursorApiKey",
-    "codexApiKey",
-]
+ACTION_IDS = ("edit-claude", "edit-cursor", "edit-codex", "clear-claude", "clear-cursor", "clear-codex", "clear-all")
+ALL_CREDENTIAL_KEYS: list[ConfigCredentialKey] = ["claudeCodeOAuthToken", "cursorApiKey", "codexApiKey"]
 
 
 def status_line(label: str, is_set: bool) -> str:
     return f"{label}: {'set' if is_set else 'missing'}"
 
 
-class AuthActionRow(Static):
-    """Clickable overview action row."""
-
-    def __init__(
-        self,
-        index: int,
-        label: str,
-        *,
-        disabled: bool = False,
-        id: str | None = None,
-    ) -> None:
-        super().__init__(f"  {label}", id=id)
-        self.row_index = index
-        self.action_label = label
-        self.action_disabled = disabled
-
-    def on_click(self) -> None:
-        parent = self.parent
-        while parent is not None:
-            if isinstance(parent, AuthScreen):
-                parent.on_action_click(self.row_index)
-                return
-            parent = parent.parent
-
-
 class AuthScreen(Widget):
-    """Auth overview + nested masked token editors."""
-
     DEFAULT_CSS = """
-    AuthScreen {
-        height: 1fr;
-        layout: vertical;
-    }
-
-    AuthScreen #auth-switcher {
-        height: 1fr;
-    }
-
-    AuthScreen #overview,
-    AuthScreen #editor {
-        height: auto;
-        layout: vertical;
-    }
-
-    AuthScreen #auth-title {
-        text-style: bold;
-        height: 1;
-    }
-
-    AuthScreen #auth-hint,
+    AuthScreen { height: 1fr; }
+    AuthScreen #auth-switcher { height: 1fr; }
+    AuthScreen #overview, AuthScreen #editor { height: auto; }
+    AuthScreen #auth-title { text-style: bold; height: 1; }
+    AuthScreen #auth-hint { color: #888888; height: auto; }
     AuthScreen #auth-back {
-        color: #888888;
-        height: auto;
+        color: #888888; background: transparent; border: none;
+        width: auto; min-width: 0; height: 3; padding: 0; margin-top: 1;
     }
-
-    AuthScreen #auth-back {
-        margin-top: 1;
-    }
-
-    AuthScreen .status-set {
-        color: green;
-        height: 1;
-    }
-
-    AuthScreen .status-missing {
-        color: yellow;
-        height: 1;
-    }
-
-    AuthScreen #auth-actions {
-        height: auto;
-        layout: vertical;
-        margin-top: 1;
-        margin-bottom: 1;
-    }
-
-    AuthScreen AuthActionRow {
-        height: 1;
-        width: 100%;
-    }
-
-    AuthScreen AuthActionRow.-focused {
-        color: black;
-        background: cyan;
-    }
-
-    AuthScreen AuthActionRow.-disabled {
-        color: #888888;
-    }
-
-    AuthScreen AuthActionRow.-focused.-disabled {
-        color: #888888;
-        background: transparent;
-    }
+    AuthScreen .status-set { color: green; height: 1; }
+    AuthScreen .status-missing { color: yellow; height: 1; }
+    AuthScreen #auth-actions { height: auto; margin: 1 0; }
     """
-
-    BINDINGS = [
-        Binding("up", "move_up", show=False),
-        Binding("down", "move_down", show=False),
-        Binding("enter", "activate", "Activate"),
-        Binding("space", "activate", show=False),
-    ]
-
-    can_focus = True
-    cursor: reactive[int] = reactive(0)
     mode: reactive[AuthMode] = reactive("overview")
 
-    def __init__(
-        self,
-        *,
-        name: str | None = None,
-        id: str | None = None,
-        classes: str | None = None,
-    ) -> None:
-        super().__init__(name=name, id=id, classes=classes)
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
         self._config: AppConfig = {}
 
     @property
@@ -155,62 +54,38 @@ class AuthScreen(Widget):
         with ContentSwitcher(id="auth-switcher", initial="overview"):
             with Vertical(id="overview"):
                 yield Static("Auth", id="auth-title")
-                yield Static(
-                    "Tokens are stored in your local planner-ai config.",
-                    id="auth-hint",
-                )
+                yield Static("Tokens are stored in your local planner-ai config.", id="auth-hint")
                 yield Static("", id="status-claude", classes="status-missing")
                 yield Static("", id="status-cursor", classes="status-missing")
                 yield Static("", id="status-codex", classes="status-missing")
-                with Vertical(id="auth-actions"):
-                    for i in range(7):
-                        yield AuthActionRow(i, "", id=f"auth-action-{i}")
+                yield OptionList(id="auth-actions")
             with Vertical(id="editor"):
                 yield TokenInput(id="auth-token-input")
-                yield Static("← Back to Auth overview", id="auth-back")
+                yield Button("← Back to Auth overview", id="auth-back", flat=True)
 
     def on_mount(self) -> None:
         self.sync_config(self._config)
 
     def sync_config(self, config: AppConfig) -> None:
         self._config = config
-        has_claude = bool(config.get("claudeCodeOAuthToken"))
-        has_cursor = bool(config.get("cursorApiKey"))
-        has_codex = bool(config.get("codexApiKey"))
-
-        self._set_status("status-claude", "Claude OAuth", has_claude)
-        self._set_status("status-cursor", "Cursor API key", has_cursor)
-        self._set_status("status-codex", "Codex API key", has_codex)
-
+        present = [bool(config.get(key)) for key in ALL_CREDENTIAL_KEYS]
+        self._set_status("status-claude", "Claude OAuth", present[0])
+        self._set_status("status-cursor", "Cursor API key", present[1])
+        self._set_status("status-codex", "Codex API key", present[2])
         labels = [
-            (
-                "Edit Claude OAuth token"
-                if has_claude
-                else "Set Claude OAuth token",
-                False,
-            ),
-            (
-                "Edit Cursor API key" if has_cursor else "Set Cursor API key",
-                False,
-            ),
-            (
-                "Edit Codex API key" if has_codex else "Set Codex API key",
-                False,
-            ),
-            ("Clear Claude token", not has_claude),
-            ("Clear Cursor key", not has_cursor),
-            ("Clear Codex key", not has_codex),
-            (
-                "Clear all credentials",
-                not (has_claude or has_cursor or has_codex),
-            ),
+            f"{'Edit' if present[0] else 'Set'} Claude OAuth token",
+            f"{'Edit' if present[1] else 'Set'} Cursor API key",
+            f"{'Edit' if present[2] else 'Set'} Codex API key",
+            "Clear Claude token", "Clear Cursor key", "Clear Codex key", "Clear all credentials",
         ]
-        for i, (label, disabled) in enumerate(labels):
-            row = self.query_one(f"#auth-action-{i}", AuthActionRow)
-            row.action_label = label
-            row.action_disabled = disabled
-            row.set_class(disabled, "-disabled")
-        self._refresh_action_styles()
+        disabled = [False, False, False, not present[0], not present[1], not present[2], not any(present)]
+        actions = self.query_one("#auth-actions", OptionList)
+        current = actions.highlighted_option.id if actions.highlighted_option else None
+        actions.clear_options()
+        for action_id, label, off in zip(ACTION_IDS, labels, disabled, strict=True):
+            actions.add_option(Option(label, id=action_id, disabled=off))
+        if current:
+            self.highlight_action(current)
 
     def _set_status(self, widget_id: str, label: str, is_set: bool) -> None:
         widget = self.query_one(f"#{widget_id}", Static)
@@ -218,118 +93,61 @@ class AuthScreen(Widget):
         widget.set_class(is_set, "status-set")
         widget.set_class(not is_set, "status-missing")
 
-    def watch_cursor(self, _cursor: int) -> None:
-        self._refresh_action_styles()
-
     def watch_mode(self, mode: AuthMode) -> None:
         switcher = self.query_one("#auth-switcher", ContentSwitcher)
         if mode == "overview":
             switcher.current = "overview"
-            self._refresh_action_styles()
-            self.focus()
+            self.query_one("#auth-actions", OptionList).focus()
         else:
             switcher.current = "editor"
             self._configure_editor(mode)
 
     def _configure_editor(self, mode: AuthMode) -> None:
         if mode == "claude":
-            label = "Claude Code OAuth token"
-            hint = "Run `claude setup-token`, then paste. Enter empty to cancel."
+            label, hint = "Claude Code OAuth token", "Run `claude setup-token`, then paste. Enter empty to cancel."
         elif mode == "cursor":
-            label = "Cursor API key"
-            hint = (
-                "From Cursor Dashboard → Integrations. Enter empty to cancel."
-            )
+            label, hint = "Cursor API key", "From Cursor Dashboard → Integrations. Enter empty to cancel."
         else:
-            label = "Codex API key"
-            hint = "From platform.openai.com/api-keys. Enter empty to cancel."
+            label, hint = "Codex API key", "From platform.openai.com/api-keys. Enter empty to cancel."
+        self.query_one("#auth-token-input", TokenInput).configure(label, hint, self._on_token_submit)
 
-        self.query_one("#auth-token-input", TokenInput).configure(
-            label,
-            hint,
-            self._on_token_submit,
-        )
+    def highlight_action(self, action_id: str) -> None:
+        if action_id in ACTION_IDS:
+            self.query_one("#auth-actions", OptionList).highlighted = ACTION_IDS.index(action_id)
 
-    def _refresh_action_styles(self) -> None:
-        if self.mode != "overview":
+    def activate_highlighted(self) -> None:
+        option = self.query_one("#auth-actions", OptionList).highlighted_option
+        if option and not option.disabled and option.id:
+            self._run_action(option.id)
+
+    @on(OptionList.OptionSelected, "#auth-actions")
+    def on_action_selected(self, event: OptionList.OptionSelected) -> None:
+        if event.option.id:
+            self._run_action(event.option.id)
+
+    def _run_action(self, action_id: str) -> None:
+        if action_id.startswith("edit-"):
+            self.mode = action_id.removeprefix("edit-")  # type: ignore[assignment]
             return
-        try:
-            actions = self.query_one("#auth-actions")
-        except Exception:
-            return
-        for i in range(7):
-            row = actions.query_one(f"#auth-action-{i}", AuthActionRow)
-            focused = self.cursor == i
-            prefix = "> " if focused else "  "
-            row.update(f"{prefix}{row.action_label}")
-            row.set_class(focused, "-focused")
-            row.set_class(row.action_disabled, "-disabled")
-
-    def action_move_up(self) -> None:
-        if self.mode != "overview":
-            return
-        self.cursor = max(0, self.cursor - 1)
-
-    def action_move_down(self) -> None:
-        if self.mode != "overview":
-            return
-        self.cursor = min(6, self.cursor + 1)
-
-    def action_activate(self) -> None:
-        if self.mode != "overview":
-            return
-        self._run_action(self.cursor)
-
-    def on_action_click(self, index: int) -> None:
-        self.cursor = index
-        row = self.query_one(f"#auth-action-{index}", AuthActionRow)
-        if not row.action_disabled:
-            self._run_action(index)
-
-    def _run_action(self, index: int) -> None:
-        row = self.query_one(f"#auth-action-{index}", AuthActionRow)
-        if row.action_disabled:
-            return
-        match index:
-            case 0:
-                self.mode = "claude"
-            case 1:
-                self.mode = "cursor"
-            case 2:
-                self.mode = "codex"
-            case 3:
-                self._clear(["claudeCodeOAuthToken"])
-            case 4:
-                self._clear(["cursorApiKey"])
-            case 5:
-                self._clear(["codexApiKey"])
-            case 6:
-                self._clear(list(ALL_CREDENTIAL_KEYS))
-
-    def _clear(self, keys: list[ConfigCredentialKey]) -> None:
-        self.app.run_worker(
-            self.planner_app.on_clear_credentials(keys),
-            exclusive=True,
-            name="auth-clear",
-        )
+        keys: dict[str, list[ConfigCredentialKey]] = {
+            "clear-claude": ["claudeCodeOAuthToken"],
+            "clear-cursor": ["cursorApiKey"],
+            "clear-codex": ["codexApiKey"],
+            "clear-all": list(ALL_CREDENTIAL_KEYS),
+        }
+        if action_id in keys:
+            self.app.run_worker(self.planner_app.on_clear_credentials(keys[action_id]), exclusive=True, name="auth-clear")
 
     def _on_token_submit(self, value: str) -> None:
         mode = self.mode
         self.mode = "overview"
         if not value:
             return
-        app = self.planner_app
-        if mode == "claude":
-            coro = app.on_save_claude(value)
-        elif mode == "cursor":
-            coro = app.on_save_cursor(value)
-        elif mode == "codex":
-            coro = app.on_save_codex(value)
-        else:
-            return
-        self.app.run_worker(coro, exclusive=True, name="auth-save")
+        callbacks = {"claude": self.planner_app.on_save_claude, "cursor": self.planner_app.on_save_cursor, "codex": self.planner_app.on_save_codex}
+        if mode in callbacks:
+            self.app.run_worker(callbacks[mode](value), exclusive=True, name="auth-save")
 
-    @on(Click, "#auth-back")
-    def on_back_click(self, event: Click) -> None:
+    @on(Button.Pressed, "#auth-back")
+    def on_back_pressed(self, event: Button.Pressed) -> None:
         event.stop()
         self.mode = "overview"

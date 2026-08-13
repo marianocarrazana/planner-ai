@@ -11,10 +11,10 @@ from planner_ai.app import PlannerApp
 from planner_ai.config import save_config
 from planner_ai.pipeline.types import ProposalState
 from planner_ai.providers.models import ModelSelection
-from planner_ai.ui.history_screen import HistoryRow, HistoryScreen
+from planner_ai.ui.history_screen import HistoryScreen
 from planner_ai.ui.result_browser import ResultBrowser
 from planner_ai.write_run_archive import ARCHIVE_DIR, write_run_archive
-from textual.widgets import ContentSwitcher, Static, Tab
+from textual.widgets import ContentSwitcher, Markdown, OptionList, Static, Tab
 
 FIXED = datetime(2026, 8, 13, 16, 48, 0)
 LATER = datetime(2026, 8, 13, 16, 49, 0)
@@ -89,7 +89,7 @@ def test_history_empty(
             empty = hist.query_one("#hist-empty", Static)
             assert "-hidden" not in empty.classes
             assert ARCHIVE_DIR in str(empty.render())
-            hist.focus()
+            hist.query_one("#hist-rows", OptionList).focus()
             await pilot.press("r")
             await pilot.pause()
             assert "-hidden" not in empty.classes
@@ -130,10 +130,10 @@ def test_history_lists_plan_and_ask_newest_first(
                 await pilot.pause()
             hist = app.query_one("#history", HistoryScreen)
             assert [r.kind for r in hist._runs] == ["ask", "plan"]
-            rows = list(hist.query(HistoryRow))
-            assert len(rows) == 2
-            text0 = str(rows[0].render())
-            text1 = str(rows[1].render())
+            rows = hist.query_one("#hist-rows", OptionList)
+            assert rows.option_count == 2
+            text0 = str(rows.get_option_at_index(0).prompt)
+            text1 = str(rows.get_option_at_index(1).prompt)
             assert "ask" in text0
             assert "plan" in text1
             assert "2026-08-13" in text0
@@ -173,7 +173,7 @@ def test_history_open_ask_shows_answer_tab(
                     break
                 await pilot.pause()
             hist = app.query_one("#history", HistoryScreen)
-            hist.focus()
+            hist.query_one("#hist-rows", OptionList).focus()
             # Newest (ask) is cursor 0
             await pilot.press("enter")
             for _ in range(20):
@@ -188,7 +188,7 @@ def test_history_open_ask_shows_answer_tab(
             assert "ask" in heading
             labels = [t.label_text for t in rb.query(Tab)]
             assert "Answer" in labels
-            body = str(rb.query_one("#rb-body-text").render())
+            body = rb.query_one("#rb-body-markdown", Markdown).source
             assert "consensus answer" in body
 
             rb.focus()
@@ -235,7 +235,7 @@ def test_history_read_error_and_back(
 
             shutil.rmtree(run_dir)
 
-            hist.focus()
+            hist.query_one("#hist-rows", OptionList).focus()
             await pilot.press("enter")
             for _ in range(20):
                 if hist._view == "error":
@@ -245,7 +245,7 @@ def test_history_read_error_and_back(
             err = str(hist.query_one("#hist-error-msg").render())
             assert len(err) > 0
 
-            hist.focus()
+            hist.query_one("#hist-rows", OptionList).focus()
             await pilot.press("escape")
             await pilot.pause()
             assert hist._view == "list"
@@ -287,7 +287,7 @@ def test_history_reload_picks_up_new_archive(
                 cwd=ws,
                 date=LATER,
             )
-            hist.focus()
+            hist.query_one("#hist-rows", OptionList).focus()
             await pilot.press("r")
             for _ in range(20):
                 if len(hist._runs) == 2:
@@ -335,7 +335,7 @@ def test_history_typescript_shaped_fixture(
                 "ask-2026-08-13T16-49-00",
                 "plan-2026-08-13T16-48-00",
             ]
-            hist.focus()
+            hist.query_one("#hist-rows", OptionList).focus()
             await pilot.press("enter")
             for _ in range(20):
                 if hist._view == "detail":
@@ -343,11 +343,11 @@ def test_history_typescript_shaped_fixture(
                 await pilot.pause()
             rb = hist.query_one("#hist-result-browser", ResultBrowser)
             assert "Answer" in [t.label_text for t in rb.query(Tab)]
-            assert "Consensus answer" in str(rb.query_one("#rb-body-text").render())
+            assert "Consensus answer" in rb.query_one("#rb-body-markdown", Markdown).source
             rb.focus()
             await pilot.press("right")
             await pilot.pause()
-            body = str(rb.query_one("#rb-body-text").render())
+            body = rb.query_one("#rb-body-markdown", Markdown).source
             assert "Answer from Cursor" in body
 
     asyncio.run(run())

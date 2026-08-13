@@ -9,9 +9,9 @@ from planner_ai import config as config_mod
 from planner_ai.app import PlannerApp
 from planner_ai.config import load_config, save_config
 from planner_ai.providers.models import MOCK_MODELS
-from planner_ai.ui.auth_screen import AuthActionRow, AuthScreen
+from planner_ai.ui.auth_screen import AuthScreen
 from planner_ai.ui.token_input import TokenInput
-from textual.widgets import Input, Static
+from textual.widgets import Input, OptionList, Static
 
 
 @pytest.fixture
@@ -56,8 +56,8 @@ def test_empty_config_shows_missing(
                 auth.query_one("#status-codex").render()
             )
             # Clear actions are disabled; activating them is a no-op
-            auth.cursor = 4  # Clear Cursor
-            await pilot.press("enter")
+            auth.highlight_action("clear-cursor")
+            auth.activate_highlighted()
             await pilot.pause()
             assert load_config() == {}
             assert auth.mode == "overview"
@@ -77,9 +77,9 @@ def test_set_cursor_key_and_restart(
         async with app.run_test() as pilot:
             await pilot.pause()
             auth = app.query_one(AuthScreen)
-            auth.focus()
-            auth.cursor = 1  # Set Cursor
-            await pilot.press("enter")
+            auth.query_one("#auth-actions", OptionList).focus()
+            auth.highlight_action("edit-cursor")
+            auth.activate_highlighted()
             await pilot.pause()
             assert auth.mode == "cursor"
 
@@ -100,8 +100,9 @@ def test_set_cursor_key_and_restart(
             assert "Cursor API key: set" in str(
                 auth.query_one("#status-cursor").render()
             )
+            actions = auth.query_one("#auth-actions", OptionList)
             assert "Edit Cursor API key" in str(
-                auth.query_one("#auth-action-1", AuthActionRow).render()
+                actions.get_option_at_index(1).prompt
             )
             visible = _visible_static_text(app)
             assert dummy not in visible
@@ -143,8 +144,9 @@ def test_empty_enter_cancels_editor(
         async with app.run_test() as pilot:
             await pilot.pause()
             auth = app.query_one(AuthScreen)
-            auth.focus()
-            await pilot.press("enter")  # Set Claude (cursor 0)
+            auth.query_one("#auth-actions", OptionList).focus()
+            auth.highlight_action("edit-claude")
+            auth.activate_highlighted()
             await pilot.pause()
             assert auth.mode == "claude"
             await pilot.press("enter")  # empty submit
@@ -178,9 +180,9 @@ def test_clear_key_preserves_include_mocks(
             assert "Cursor API key: set" in str(
                 auth.query_one("#status-cursor").render()
             )
-            auth.focus()
-            auth.cursor = 4  # Clear Cursor
-            await pilot.press("enter")
+            auth.query_one("#auth-actions", OptionList).focus()
+            auth.highlight_action("clear-cursor")
+            auth.activate_highlighted()
             for _ in range(20):
                 if "cursorApiKey" not in load_config():
                     break

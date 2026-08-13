@@ -12,7 +12,7 @@ from planner_ai.pipeline.types import ProposalState
 from planner_ai.providers.models import ModelSelection
 from planner_ai.providers.resolve import ResolvedProviders
 from planner_ai.ui.result_browser import PRIMARY_TAB_ID, ResultBrowser
-from textual.widgets import ContentSwitcher, Input, Static, Tab
+from textual.widgets import ContentSwitcher, Input, Markdown, Static, Tab
 
 
 @pytest.fixture
@@ -119,7 +119,7 @@ def test_plan_result_browser_tabs(
             await pilot.press("right")
             await pilot.pause()
             assert rb._active_tab != PRIMARY_TAB_ID
-            body = str(rb.query_one("#rb-body-text").render())
+            body = rb.query_one("#rb-body-markdown", Markdown).source
             assert "Proposal" in body or len(body) > 0
 
             await pilot.press("left")
@@ -214,13 +214,13 @@ def test_partial_error_consensus_line(
             await pilot.pause()
             await pilot.press("right")
             await pilot.pause()
-            body = str(rb.query_one("#rb-body-text").render())
+            body = rb.query_one("#rb-body-markdown", Markdown).source
             path = str(rb.query_one("#rb-path").render())
             # One of the tabs should show the error
             if "beta failed" not in body:
                 await pilot.press("right")
                 await pilot.pause()
-                body = str(rb.query_one("#rb-body-text").render())
+                body = rb.query_one("#rb-body-markdown", Markdown).source
                 path = str(rb.query_one("#rb-path").render())
             assert "beta failed" in body or "Error" in path
 
