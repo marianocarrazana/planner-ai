@@ -2,9 +2,7 @@
 
 Multi-agent terminal UI: several independent proposer agents inspect the workspace in parallel (each on a model you pick), then a separate consensus agent reconciles their outputs into one plan or answer. Plan mode writes `plan.md`; Ask mode returns a Q&A answer. It plans and answers; it does not execute.
 
-It is both **multi-model** (Claude, Cursor, Codex, and optional mocks) and **multi-agent** (one agent per proposer, plus a consensus agent—not a single agent that fans out to several models).
-
-This package is the Python/Textual port. The TypeScript app at the repo root remains available until you cut over fully.
+It is both **multi-model** (Claude, Grok, GPT, Gemini, etc) and **multi-agent** (one agent per proposer, plus a consensus agent—not a single agent that fans out to several models).
 
 ## Requirements
 
