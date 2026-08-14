@@ -32,6 +32,12 @@ def parse_app_tab_id(widget_id: str | None) -> AppTab | None:
 class AppTabs(Tabs):
     """Top-level app tabs using Textual's native Tabs chrome."""
 
+    DEFAULT_CSS = """
+    AppTabs {
+        margin-top: 1;
+    }
+    """
+
     def __init__(self) -> None:
         super().__init__(
             *[Tab(label, id=app_tab_widget_id(tab_id)) for tab_id, label in TABS],

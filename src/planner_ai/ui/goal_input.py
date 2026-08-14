@@ -3,11 +3,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import Input, Static
 
 from planner_ai.pipeline.types import RunMode
+from planner_ai.ui.plan_helpers import format_consensus_source, format_proposer_sources
 
 if TYPE_CHECKING:
     from planner_ai.app import PlannerApp
@@ -31,7 +32,7 @@ class ModePill(Static):
 
 
 class GoalInput(Widget):
-    """Plan/Ask toggle + goal/question input."""
+    """Plan/Ask toggle, goal/question input, and selected models."""
 
     DEFAULT_CSS = """
     GoalInput {
@@ -42,7 +43,23 @@ class GoalInput(Widget):
     GoalInput #mode-row {
         height: 1;
         layout: horizontal;
-        margin-bottom: 1;
+        margin-top: 1;
+    }
+
+    GoalInput #goal-models {
+        height: auto;
+        layout: vertical;
+        margin-top: 1;
+    }
+
+    GoalInput #goal-models.-hidden {
+        display: none;
+    }
+
+    GoalInput #goal-proposers,
+    GoalInput #goal-consensus {
+        color: #888888;
+        height: 1;
     }
 
     GoalInput ModePill {
@@ -63,19 +80,20 @@ class GoalInput(Widget):
     }
 
     GoalInput #goal-row {
-        height: 1;
+        height: 3;
         layout: horizontal;
     }
 
     GoalInput #goal-prefix {
         color: #888888;
         width: 2;
-        height: 1;
+        height: 3;
+        content-align: left middle;
     }
 
     GoalInput #goal-field {
         width: 1fr;
-        height: 1;
+        height: 3;
     }
     """
 
@@ -94,16 +112,20 @@ class GoalInput(Widget):
         return self.app  # type: ignore[return-value]
 
     def compose(self) -> ComposeResult:
-        with Horizontal(id="mode-row"):
-            yield ModePill("plan", "Plan", id="pill-plan")
-            yield ModePill("ask", "Ask", id="pill-ask")
         yield Static("What goal should we plan for?", id="goal-prompt")
         with Horizontal(id="goal-row"):
             yield Static("> ", id="goal-prefix")
             yield Input(placeholder="Describe the goal…", id="goal-field")
+        with Horizontal(id="mode-row"):
+            yield ModePill("plan", "Plan", id="pill-plan")
+            yield ModePill("ask", "Ask", id="pill-ask")
+        with Vertical(id="goal-models", classes="-hidden"):
+            yield Static("", id="goal-proposers")
+            yield Static("", id="goal-consensus")
 
     def on_mount(self) -> None:
         self.sync_mode(self.planner_app.run_mode)
+        self.sync_models()
 
     def sync_mode(self, mode: RunMode) -> None:
         self._mode = mode
@@ -117,6 +139,22 @@ class GoalInput(Widget):
         else:
             prompt.update("What goal should we plan for?")
             field.placeholder = "Describe the goal…"
+
+    def sync_models(self) -> None:
+        models = self.query_one("#goal-models")
+        providers = self.planner_app.providers
+        if providers is None:
+            self.query_one("#goal-proposers", Static).update("")
+            self.query_one("#goal-consensus", Static).update("")
+            models.add_class("-hidden")
+            return
+        self.query_one("#goal-proposers", Static).update(
+            format_proposer_sources(providers.sources)
+        )
+        self.query_one("#goal-consensus", Static).update(
+            format_consensus_source(providers.sources)
+        )
+        models.remove_class("-hidden")
 
     def set_mode(self, mode: RunMode) -> None:
         self.planner_app.set_run_mode(mode)

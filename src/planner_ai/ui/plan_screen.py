@@ -241,6 +241,7 @@ class PlanScreen(Widget):
             switcher.current = "idle"
             goal = self.query_one("#goal-input", GoalInput)
             goal.sync_mode(self._mode)
+            goal.sync_models()
             return
 
         if self._phase in ("proposing", "consensus", "writing"):

@@ -5,19 +5,19 @@ from pathlib import Path
 
 import pytest
 
-from textual.widgets import Footer
+from textual.widgets import Footer, Header
 
 from planner_ai import config as config_mod
 from planner_ai.app import (
     PlannerApp,
     credential_label,
-    format_sources,
     startup_tab,
 )
 from planner_ai.config import save_config
 from planner_ai.providers.models import MOCK_MODELS
-from planner_ai.ui.plan_helpers import has_any_real_credential
+from planner_ai.ui.plan_helpers import format_sources, has_any_real_credential
 from planner_ai.ui.tabs import AppTabs
+from planner_ai.workspace import get_workspace_cwd
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def test_format_sources() -> None:
                 "consensus": "mock:gamma",
             }
         )
-        == "proposers: mock:alpha + mock:beta · consensus: mock:gamma"
+        == "proposers: mock:alpha + mock:beta\nconsensus: mock:gamma"
     )
 
 
@@ -119,7 +119,12 @@ def test_ctrl_tabs_and_click(config_home: Path, monkeypatch: pytest.MonkeyPatch)
             ]
             assert len(quit_keys) == 1
 
-            assert "config:" in str(app.query_one("#header-sources").render())
+            header = app.query_one(Header)
+            assert header is not None
+            assert app.title == "planner-ai"
+            assert app.sub_title == str(get_workspace_cwd())
+            assert "cwd:" not in app.sub_title
+            assert "proposers:" not in app.sub_title
             assert "-hidden" in app.query_one("#loading-config").classes
 
     asyncio.run(run())

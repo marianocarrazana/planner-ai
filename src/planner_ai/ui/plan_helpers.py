@@ -4,7 +4,7 @@ from typing import Literal
 
 from planner_ai.config import AppConfig
 from planner_ai.pipeline.types import ProposalStatus, RunMode
-from planner_ai.providers.resolve import ResolvedProviders
+from planner_ai.providers.resolve import ResolvedProviders, ResolvedSources
 
 PlanGate = Literal["ready", "need-models", "need-auth"]
 
@@ -14,6 +14,26 @@ def has_any_real_credential(creds: AppConfig) -> bool:
         creds.get("claudeCodeOAuthToken")
         or creds.get("cursorApiKey")
         or creds.get("codexApiKey")
+    )
+
+
+def format_proposer_sources(sources: ResolvedSources | dict[str, object]) -> str:
+    proposers_raw = sources.get("proposers", [])
+    if isinstance(proposers_raw, list):
+        proposers = " + ".join(str(p) for p in proposers_raw)
+    else:
+        proposers = ""
+    return f"proposers: {proposers}"
+
+
+def format_consensus_source(sources: ResolvedSources | dict[str, object]) -> str:
+    consensus = sources.get("consensus", "")
+    return f"consensus: {consensus}"
+
+
+def format_sources(sources: ResolvedSources | dict[str, object]) -> str:
+    return (
+        f"{format_proposer_sources(sources)}\n{format_consensus_source(sources)}"
     )
 
 

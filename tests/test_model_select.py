@@ -19,7 +19,7 @@ from planner_ai.ui.model_select import (
     snap_to_choice_row,
     toggle_proposer,
 )
-from textual.widgets import Button
+from textual.widgets import Button, Static
 
 @pytest.fixture
 def config_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -293,9 +293,10 @@ def test_continue_saves_and_goes_to_plan(
             saved = load_config().get("modelSelection")
             assert saved is not None
             assert len(saved["proposers"]) > 0
-            sources = str(app.query_one("#header-sources").render())
-            assert sources.startswith("proposers:")
-            assert "consensus:" in sources
+            proposers = str(app.query_one("#goal-proposers", Static).render())
+            consensus = str(app.query_one("#goal-consensus", Static).render())
+            assert proposers.startswith("proposers:")
+            assert consensus.startswith("consensus:")
 
     asyncio.run(run())
 
@@ -326,10 +327,11 @@ def test_restart_lands_on_plan_with_sources(
             await pilot.pause()
             assert app.active_tab == "plan"
             assert app.providers is not None
-            sources = str(app.query_one("#header-sources").render())
-            assert "mock:alpha" in sources
-            assert "mock:beta" in sources
-            assert "mock:gamma" in sources
+            proposers = str(app.query_one("#goal-proposers", Static).render())
+            consensus = str(app.query_one("#goal-consensus", Static).render())
+            assert "mock:alpha" in proposers
+            assert "mock:beta" in proposers
+            assert "mock:gamma" in consensus
 
     asyncio.run(run())
 

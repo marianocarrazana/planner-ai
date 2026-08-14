@@ -2,14 +2,20 @@ from __future__ import annotations
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
-from textual.widgets import ContentSwitcher, Footer, LoadingIndicator, Static, Tabs
+from textual.widgets import (
+    ContentSwitcher,
+    Footer,
+    Header,
+    LoadingIndicator,
+    Static,
+    Tabs,
+)
 
 from planner_ai.config import (
+    APP_NAME,
     AppConfig,
     ConfigCredentialKey,
     clear_credentials,
-    get_config_path,
     load_config,
     save_config,
 )
@@ -40,16 +46,6 @@ from planner_ai.ui.tabs import (
 from planner_ai.workspace import get_workspace_cwd
 
 
-def format_sources(sources: dict[str, object]) -> str:
-    proposers_raw = sources.get("proposers", [])
-    if isinstance(proposers_raw, list):
-        proposers = " + ".join(str(p) for p in proposers_raw)
-    else:
-        proposers = ""
-    consensus = sources.get("consensus", "")
-    return f"proposers: {proposers} · consensus: {consensus}"
-
-
 def credential_label(key: ConfigCredentialKey) -> str:
     match key:
         case "claudeCodeOAuthToken":
@@ -71,31 +67,12 @@ def startup_tab(creds: AppConfig, choices: list[ModelChoice]) -> AppTab:
 class PlannerApp(App[None]):
     """Textual shell: header, tabs, config load / model reload / plan runs."""
 
+    TITLE = APP_NAME
     ENABLE_COMMAND_PALETTE = False
 
     CSS = """
     Screen {
         layout: vertical;
-        padding: 1 1 0 1;
-    }
-
-    #header {
-        height: auto;
-        layout: vertical;
-    }
-
-    #header-title {
-        text-style: bold;
-    }
-
-    #header-cwd,
-    #header-sources,
-    #header-goal {
-        color: #888888;
-    }
-
-    #header-goal.-hidden {
-        display: none;
     }
 
     #loading-config {
@@ -109,6 +86,7 @@ class PlannerApp(App[None]):
 
     #tab-body {
         height: 1fr;
+        padding: 1 1 0 1;
     }
 
     .placeholder-pane {
@@ -162,11 +140,7 @@ class PlannerApp(App[None]):
         self._syncing_app_tabs = False
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="header"):
-            yield Static("planner-ai", id="header-title")
-            yield Static("", id="header-cwd")
-            yield Static("", id="header-sources")
-            yield Static("", id="header-goal", classes="-hidden")
+        yield Header()
         yield AppTabs()
         yield LoadingIndicator(id="loading-config")
         with ContentSwitcher(id="tab-body", initial="plan"):
@@ -205,21 +179,11 @@ class PlannerApp(App[None]):
         loading.set_class(not visible, "-hidden")
 
     def _refresh_header(self) -> None:
-        self.query_one("#header-cwd", Static).update(f"cwd: {get_workspace_cwd()}")
-        sources = self.query_one("#header-sources", Static)
-        if self.providers is not None:
-            sources.update(format_sources(self.providers.sources))
-        else:
-            sources.update(f"config: {get_config_path()}")
-
-        goal_widget = self.query_one("#header-goal", Static)
+        parts = [str(get_workspace_cwd())]
         if self.goal:
             prefix = "Question" if self.run_mode == "ask" else "Goal"
-            goal_widget.update(f"{prefix}: {self.goal}")
-            goal_widget.remove_class("-hidden")
-        else:
-            goal_widget.update("")
-            goal_widget.add_class("-hidden")
+            parts.append(f"{prefix}: {self.goal}")
+        self.sub_title = " · ".join(parts)
 
     def _failing_labels(self) -> list[str]:
         return [credential_label(k) for k in self.failing_keys]

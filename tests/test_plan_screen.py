@@ -226,12 +226,26 @@ def test_plan_ask_toggle(
             await pilot.pause()
             assert app.active_tab == "plan"
             assert "goal" in str(app.query_one("#goal-prompt", Static).render()).lower()
+            field = app.query_one("#goal-field", Input)
+            assert field.outer_size.height >= 3
+            assert (
+                app.query_one("#mode-row").region.y
+                > app.query_one("#goal-row").region.y
+            )
+            models = app.query_one("#goal-models")
+            proposers = app.query_one("#goal-proposers", Static)
+            consensus = app.query_one("#goal-consensus", Static)
+            assert models.region.y > app.query_one("#mode-row").region.y
+            assert consensus.region.y > proposers.region.y
+            assert str(proposers.render()).startswith("proposers:")
+            assert str(consensus.render()).startswith("consensus:")
             await pilot.click("#pill-ask")
             await pilot.pause()
             assert app.run_mode == "ask"
             assert "ask" in str(app.query_one("#goal-prompt", Static).render()).lower()
             # Header goal hidden until submit
-            assert "-hidden" in app.query_one("#header-goal").classes
+            assert "Goal:" not in app.sub_title
+            assert "Question:" not in app.sub_title
 
     asyncio.run(run())
 
@@ -265,6 +279,7 @@ def test_mock_plan_run(
                     break
                 await pilot.pause()
             assert app.phase == "done"
+            assert "Goal: ship it" in app.sub_title
             rb = app.query_one(ResultBrowser)
             assert "Plan ready" in str(rb.query_one("#rb-heading").render())
             assert (ws / "plan.md").exists()
@@ -304,6 +319,7 @@ def test_mock_ask_run_no_plan_md(
                 await pilot.pause()
             assert app.phase == "done"
             assert app.run_mode == "ask"
+            assert "Question: what is this" in app.sub_title
             rb = app.query_one(ResultBrowser)
             assert "Answer ready" in str(rb.query_one("#rb-heading").render())
             assert not (ws / "plan.md").exists()
