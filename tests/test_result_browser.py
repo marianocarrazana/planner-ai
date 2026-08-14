@@ -11,7 +11,8 @@ from planner_ai.config import save_config
 from planner_ai.pipeline.types import ProposalState
 from planner_ai.providers.models import ModelSelection
 from planner_ai.providers.resolve import ResolvedProviders
-from planner_ai.ui.result_browser import PRIMARY_TAB_ID, ResultBrowser
+from planner_ai.ui.result_browser import PRIMARY_TAB_ID, ResultBrowser, ResultTabs
+from textual.containers import VerticalScroll
 from textual.widgets import ContentSwitcher, Input, Markdown, Static, Tab
 
 
@@ -148,12 +149,20 @@ def test_ask_result_browser_answer_tab(
             await pilot.press(*list("what is this"))
             await pilot.press("enter")
             await _wait_done(app, pilot)
+            await pilot.pause()
 
             rb = app.query_one("#result-browser", ResultBrowser)
             assert "Answer ready" in str(rb.query_one("#rb-heading").render())
             labels = [t.label_text for t in rb.query(Tab)]
             assert "Answer" in labels
             assert "Plan" not in labels
+            tabs = rb.query_one(ResultTabs)
+            body = rb.query_one("#rb-body", VerticalScroll)
+            assert tabs.size.height <= 3
+            assert body.size.height > 5
+            assert body.region.y < rb.region.y + rb.size.height
+            md = rb.query_one("#rb-body-markdown", Markdown)
+            assert len(md.source) > 0
 
     asyncio.run(run())
 

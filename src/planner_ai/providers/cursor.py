@@ -29,7 +29,12 @@ async def run_prompt(
     prompt: str,
     options: ProviderCallOptions | None = None,
 ) -> str:
-    from cursor_sdk import AsyncClient, CursorAgentError, LocalAgentOptions
+    from cursor_sdk import (
+        AgentOptions,
+        AsyncClient,
+        CursorAgentError,
+        LocalAgentOptions,
+    )
 
     cwd = get_workspace_cwd()
     abort = create_call_abort(options)
@@ -40,12 +45,14 @@ async def run_prompt(
             workspace=str(cwd)
         ) as client:
             async with await client.agents.create(
-                model=model_id,
-                api_key=api_key,
-                tools=list(READ_TOOLS),
-                local=LocalAgentOptions(
-                    cwd=str(cwd),
-                    setting_sources=["project"],
+                AgentOptions(
+                    model=model_id,
+                    api_key=api_key,
+                    tools=list(READ_TOOLS),
+                    local=LocalAgentOptions(
+                        cwd=str(cwd),
+                        setting_sources=["project"],
+                    ),
                 ),
             ) as agent:
                 run = await agent.send(prompt)

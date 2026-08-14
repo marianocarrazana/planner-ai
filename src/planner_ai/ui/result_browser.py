@@ -48,7 +48,7 @@ class ResultBrowser(Widget):
     }
 
     ResultBrowser ResultTabs {
-        height: auto;
+        height: 2;
         width: 100%;
     }
 

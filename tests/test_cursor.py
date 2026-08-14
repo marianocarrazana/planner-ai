@@ -63,8 +63,10 @@ class FakeAgent:
 class FakeAgents:
     agent: FakeAgent
 
-    async def create(self, **kwargs: Any) -> FakeAgent:
+    async def create(self, options: Any = None, **kwargs: Any) -> FakeAgent:
         self.agent.create_kwargs.update(kwargs)
+        if options is not None:
+            self.agent.create_kwargs["options"] = options
         return self.agent
 
 
@@ -120,17 +122,30 @@ def _install_fakes(
             self.kwargs = kwargs
             captured["local"] = kwargs
 
-    async def create_override(**kwargs: Any) -> FakeAgent:
+    class FakeAgentOptions:
+        def __init__(self, **kwargs: Any) -> None:
+            self.kwargs = kwargs
+            captured["options"] = kwargs
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+    async def create_override(
+        options: Any = None, **kwargs: Any
+    ) -> FakeAgent:
         captured["create"] = kwargs
+        captured["create_options"] = options
         if raise_on_create is not None:
             raise raise_on_create
         agents.agent.create_kwargs.update(kwargs)
+        if options is not None:
+            agents.agent.create_kwargs["options"] = options
         return agents.agent
 
     agents.create = create_override  # type: ignore[method-assign]
 
     fake_sdk = MagicMock()
     fake_sdk.AsyncClient = FakeAsyncClient
+    fake_sdk.AgentOptions = FakeAgentOptions
     fake_sdk.LocalAgentOptions = FakeLocalAgentOptions
     fake_sdk.CursorAgentError = FakeCursorAgentError
 
@@ -154,10 +169,11 @@ def test_cursor_propose_success(
     body = asyncio.run(proposer.propose("Ship it"))
     assert body == "# Cursor plan"
 
-    create = captured["create"]
-    assert create["api_key"] == "ckey"
-    assert create["model"] == "composer-2.5"
-    assert create["tools"] == READ_TOOLS
+    opts = captured["options"]
+    assert opts["api_key"] == "ckey"
+    assert opts["model"] == "composer-2.5"
+    assert opts["tools"] == READ_TOOLS
+    assert captured["create"] == {}
     assert captured["local"]["cwd"] == str(tmp_path.resolve())
     assert captured["local"]["setting_sources"] == ["project"]
     prompt = captured["agent"].create_kwargs["last_prompt"]

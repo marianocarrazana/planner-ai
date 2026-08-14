@@ -72,7 +72,7 @@ class ConsensusView(Widget):
             self._elapsed = None
             self._stop_timer()
         if self.is_mounted:
-            self._render()
+            self._refresh_copy()
 
     def _ensure_timer(self) -> None:
         if self._timer is None:
@@ -91,9 +91,9 @@ class ConsensusView(Widget):
             0, int((time.time() * 1000 - self._started_at) // 1000)
         )
         if self.is_mounted:
-            self._render()
+            self._refresh_copy()
 
-    def _render(self) -> None:
+    def _refresh_copy(self) -> None:
         self.query_one("#consensus-title", Static).update(
             consensus_title(writing=self._writing, mode=self._mode)
         )

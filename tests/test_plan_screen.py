@@ -20,8 +20,10 @@ from planner_ai.ui.plan_helpers import (
     plan_gate,
     status_label,
 )
+from planner_ai.ui.consensus_view import ConsensusView
 from planner_ai.ui.plan_screen import PlanScreen
 from planner_ai.ui.result_browser import ResultBrowser
+from textual.widget import Widget
 from textual.widgets import ContentSwitcher, Input, Static
 
 
@@ -492,6 +494,54 @@ def test_ctrl_tabs_while_goal_focused(
             assert app.active_tab == "auth"
             await pilot.press("ctrl+1")
             assert app.active_tab == "plan"
+
+    asyncio.run(run())
+
+
+def test_consensus_view_does_not_shadow_textual_render() -> None:
+    assert ConsensusView._render is Widget._render
+
+
+def test_consensus_view_paints_during_consensus(
+    config_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _mock_choices(monkeypatch)
+    save_config(
+        {
+            "cursorApiKey": "dummy",
+            "includeMocks": True,
+            "modelSelection": MOCK_SELECTION,
+        }
+    )
+
+    async def run() -> None:
+        app = PlannerApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.phase = "consensus"
+            app.proposals = [
+                ProposalState(
+                    id="mock:alpha",
+                    label="Alpha",
+                    status="done",
+                    body="# a",
+                )
+            ]
+            app.consensus_started_at = 1
+            app._sync_plan_screen()
+            await pilot.pause()
+            consensus = app.query_one("#run-consensus", ConsensusView)
+            assert not consensus.has_class("-hidden")
+            assert str(consensus.query_one("#consensus-title", Static).render()) == (
+                "Consensus"
+            )
+            assert "Reconciling" in str(
+                consensus.query_one("#consensus-body", Static).render()
+            )
+            consensus.refresh()
+            await pilot.pause()
+            visual = consensus._render()
+            assert visual is not None
 
     asyncio.run(run())
 
