@@ -1,6 +1,8 @@
 # Planner AI
 
-Terminal UI that asks several models for a plan or answer in parallel, reconciles via a consensus model, and either writes `plan.md` (Plan mode) or returns a Q&A answer (Ask mode). It plans and answers; it does not execute.
+Multi-agent terminal UI: several independent proposer agents inspect the workspace in parallel (each on a model you pick), then a separate consensus agent reconciles their outputs into one plan or answer. Plan mode writes `plan.md`; Ask mode returns a Q&A answer. It plans and answers; it does not execute.
+
+It is both **multi-model** (Claude, Cursor, Codex, and optional mocks) and **multi-agent** (one agent per proposer, plus a consensus agent—not a single agent that fans out to several models).
 
 This package is the Python/Textual port. The TypeScript app at the repo root remains available until you cut over fully.
 
@@ -78,10 +80,10 @@ planner --reset-auth
 ## What it does
 
 - Plans/asks against the folder you launched the CLI in (`cwd`)
-- Asks several models in parallel (one failure does not cancel the others)
-- Uses a separate consensus model to reconcile
+- Runs several proposer agents in parallel, each on a different model (one failure does not cancel the others)
+- Runs a separate consensus agent (on its own model) to reconcile those proposals
 - **Plan mode:** writes `plan.md` in that folder (backs up an existing file as `plan.md.bak`) and archives the run
-- **Ask mode:** same multi-proposer + consensus flow with Q&A prompts; does **not** write cwd `plan.md`; archives under `.planner-ai/ask-…/`
+- **Ask mode:** same multi-agent proposer + consensus flow with Q&A prompts; does **not** write cwd `plan.md`; archives under `.planner-ai/ask-…/`
 
 ## TUI
 
@@ -102,14 +104,14 @@ Startup opens **Auth** if no real credential is set, else **Proposers** if there
 ## How it works
 
 1. You provide a goal (Plan) or question (Ask) on the Plan tab.
-2. Models inspect the current working directory (read-only) and each propose.
-3. A consensus model reconciles the proposals into one plan or answer.
+2. Each proposer agent inspects the current working directory (read-only) with its own tools and proposes independently.
+3. A consensus agent inspects the workspace and reconciles those proposals into one plan or answer.
 4. Plan mode writes `plan.md`; both modes archive under `.planner-ai/`.
 
 ```mermaid
 flowchart LR
-  Goal[Goal or question] --> Models[Multi-model proposals]
-  Models --> Consensus[Consensus model]
+  Goal[Goal or question] --> Proposers[Proposer agents in parallel]
+  Proposers --> Consensus[Consensus agent]
   Consensus --> Plan[plan.md or answer.md archive]
 ```
 
