@@ -10,8 +10,7 @@ from planner_ai.pipeline.run_pipeline import run_pipeline
 from planner_ai.pipeline.types import Phase, PipelineCallbacks, ProposalState
 from planner_ai.providers.mock import mock_consensus, mock_proposers
 from planner_ai.providers.types import ProviderCallOptions
-from planner_ai.write_plan import PLAN_FILENAME
-from planner_ai.write_run_archive import ARCHIVE_DIR
+from planner_ai.write_run_archive import ARCHIVE_DIR, PLAN_FILENAME
 
 
 @dataclass
@@ -64,7 +63,7 @@ def _alpha_beta() -> list:
     ]
 
 
-def test_plan_mode_writes_plan_and_archive(tmp_path: Path) -> None:
+def test_plan_mode_writes_archive_only(tmp_path: Path) -> None:
     callbacks, phases, _ = _callbacks()
 
     async def run():
@@ -79,10 +78,8 @@ def test_plan_mode_writes_plan_and_archive(tmp_path: Path) -> None:
     result = asyncio.run(run())
 
     assert result.mode == "plan"
-    assert result.plan_path == tmp_path / PLAN_FILENAME
-    assert (tmp_path / PLAN_FILENAME).exists()
-    assert result.plan_path is not None
-    assert result.plan_path.read_text(encoding="utf-8") == result.plan
+    assert result.plan_path is None
+    assert not (tmp_path / PLAN_FILENAME).exists()
     assert result.archive_path.parent == tmp_path / ARCHIVE_DIR
     assert result.archive_path.name.startswith("plan-")
     assert (result.archive_path / "plan.md").read_text(encoding="utf-8") == result.plan

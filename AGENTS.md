@@ -4,7 +4,7 @@ Agent notes for the Python port under `planner-ai/`. Product rules match the rep
 
 ## Project
 
-Terminal UI (Textual) that asks several models for a plan or answer in parallel, reconciles via a consensus model, and either writes `plan.md` (Plan mode) or returns a Q&A answer (Ask mode). It plans/answers; it does not execute.
+Terminal UI (Textual) that asks several models for a plan or answer in parallel, reconciles via a consensus model, and archives `plan.md` (Plan mode) or `answer.md` (Ask mode) under `.planner-ai/`. It plans/answers; it does not execute.
 
 ## Stack
 
@@ -36,7 +36,6 @@ src/planner_ai/
   app.py                 # tabs + orchestration
   config.py              # OS user config (tokens + model selection)
   workspace.py           # get_workspace_cwd() = Path.cwd().resolve()
-  write_plan.py          # writes cwd plan.md (Plan mode only)
   write_run_archive.py   # archives run under .planner-ai/
   read_run_archive.py    # list/read archived runs for History tab
   ui/                    # Textual screens/widgets
@@ -53,7 +52,7 @@ tests/
 - Prompts live in `providers/prompts.py`; keep them read-only over the workspace. Plan vs Ask via `ProviderCallOptions.mode`.
 - Credentials belong only in the OS config path from `config.py` — never commit tokens, never log them.
 - Sanitize pasted tokens with `sanitize_token` before persist/use.
-- Plan mode: always-current artifact is `plan.md` in the workspace cwd.
+- Plan mode: consensus artifact is `.planner-ai/plan-{timestamp}/plan.md`; does not write cwd `plan.md`.
 - Ask mode: Plan tab toggle; same multi-proposer + consensus flow with Q&A prompts; does not write cwd `plan.md`.
 - Each successful run is archived under `.planner-ai/`:
   - Plan: `plan-{YYYY-MM-DDTHH-MM-SS}/` with per-model `*-output.md` and `plan.md`

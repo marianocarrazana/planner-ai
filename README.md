@@ -1,6 +1,6 @@
 # Planner AI
 
-Multi-agent terminal UI: several independent proposer agents inspect the workspace in parallel (each on a model you pick), then a separate consensus agent reconciles their outputs into one plan or answer. Plan mode writes `plan.md`; Ask mode returns a Q&A answer. It plans and answers; it does not execute.
+Multi-agent terminal UI: several independent proposer agents inspect the workspace in parallel (each on a model you pick), then a separate consensus agent reconciles their outputs into one plan or answer. Plan mode archives `plan.md` under `.planner-ai/`; Ask mode archives a Q&A answer. It plans and answers; it does not execute.
 
 It is both **multi-model** (Claude, Grok, GPT, Gemini, etc) and **multi-agent** (one agent per proposer, plus a consensus agent—not a single agent that fans out to several models).
 
@@ -80,8 +80,8 @@ planner --reset-auth
 - Plans/asks against the folder you launched the CLI in (`cwd`)
 - Runs several proposer agents in parallel, each on a different model (one failure does not cancel the others)
 - Runs a separate consensus agent (on its own model) to reconcile those proposals
-- **Plan mode:** writes `plan.md` in that folder (backs up an existing file as `plan.md.bak`) and archives the run
-- **Ask mode:** same multi-agent proposer + consensus flow with Q&A prompts; does **not** write cwd `plan.md`; archives under `.planner-ai/ask-…/`
+- **Plan mode:** archives the consensus plan under `.planner-ai/plan-…/` (does **not** write cwd `plan.md`)
+- **Ask mode:** same multi-agent proposer + consensus flow with Q&A prompts; archives under `.planner-ai/ask-…/`
 
 ## TUI
 
@@ -104,7 +104,7 @@ Startup opens **Auth** if no real credential is set, else **Proposers** if there
 1. You provide a goal (Plan) or question (Ask) on the Plan tab.
 2. Each proposer agent inspects the current working directory (read-only) with its own tools and proposes independently.
 3. A consensus agent inspects the workspace and reconciles those proposals into one plan or answer.
-4. Plan mode writes `plan.md`; both modes archive under `.planner-ai/`.
+4. Both modes archive under `.planner-ai/` (`plan.md` or `answer.md`).
 
 ```mermaid
 flowchart LR
@@ -115,7 +115,7 @@ flowchart LR
 
 ## Output
 
-`plan.md` (Plan mode) is the artifact meant for a later execution step. This tool produces the plan; it does not run it.
+`.planner-ai/plan-…/plan.md` (Plan mode) is the artifact meant for a later execution step. This tool produces the plan; it does not run it.
 
 Each successful run is archived under `.planner-ai/`:
 

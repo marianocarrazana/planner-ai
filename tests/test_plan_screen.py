@@ -77,7 +77,7 @@ def test_consensus_copy() -> None:
         consensus_body(writing=False, mode="ask")
         == "Reconciling answers into one response…"
     )
-    assert consensus_body(writing=True, mode="plan") == "Saving plan.md…"
+    assert consensus_body(writing=True, mode="plan") == "Archiving plan…"
     assert consensus_body(writing=True, mode="ask") == "Archiving answer…"
 
 
@@ -112,10 +112,6 @@ def _workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     ws.mkdir()
     monkeypatch.setattr(
         "planner_ai.workspace.get_workspace_cwd",
-        lambda: ws,
-    )
-    monkeypatch.setattr(
-        "planner_ai.write_plan.get_workspace_cwd",
         lambda: ws,
     )
     monkeypatch.setattr(
@@ -284,7 +280,7 @@ def test_mock_plan_run(
             assert "Goal: ship it" in app.sub_title
             rb = app.query_one(ResultBrowser)
             assert "Plan ready" in str(rb.query_one("#rb-heading").render())
-            assert (ws / "plan.md").exists()
+            assert not (ws / "plan.md").exists()
             archives = list((ws / ".planner-ai").glob("plan-*"))
             assert len(archives) == 1
 
@@ -463,7 +459,8 @@ def test_error_esc_back_enter_retry(
                     break
                 await pilot.pause()
             assert app.phase == "done"
-            assert (ws / "plan.md").exists()
+            assert not (ws / "plan.md").exists()
+            assert list((ws / ".planner-ai").glob("plan-*"))
 
     asyncio.run(run())
 

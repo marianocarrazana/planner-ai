@@ -95,7 +95,7 @@ def consensus_body(
 ) -> str:
     is_ask = mode == "ask"
     if writing:
-        return "Archiving answer…" if is_ask else "Saving plan.md…"
+        return "Archiving answer…" if is_ask else "Archiving plan…"
     base = (
         "Reconciling answers into one response…"
         if is_ask

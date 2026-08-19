@@ -49,10 +49,6 @@ def _workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         lambda: ws,
     )
     monkeypatch.setattr(
-        "planner_ai.write_plan.get_workspace_cwd",
-        lambda: ws,
-    )
-    monkeypatch.setattr(
         "planner_ai.write_run_archive.get_workspace_cwd",
         lambda: ws,
     )

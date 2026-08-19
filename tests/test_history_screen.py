@@ -40,7 +40,6 @@ def _workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     ws.mkdir()
     for mod in (
         "planner_ai.workspace.get_workspace_cwd",
-        "planner_ai.write_plan.get_workspace_cwd",
         "planner_ai.write_run_archive.get_workspace_cwd",
         "planner_ai.read_run_archive.get_workspace_cwd",
     ):

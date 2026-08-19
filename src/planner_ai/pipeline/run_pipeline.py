@@ -17,7 +17,6 @@ from planner_ai.providers.types import (
     ProposalRef,
     ProviderCallOptions,
 )
-from planner_ai.write_plan import write_plan
 from planner_ai.write_run_archive import write_run_archive
 
 
@@ -114,9 +113,6 @@ async def run_pipeline(
     plan = await consensus.reconcile(trimmed, successful, call_options)
 
     callbacks.on_phase("writing")
-    plan_path: Path | None = None
-    if mode == "plan":
-        plan_path = write_plan(plan, cwd=cwd)
     archive_path = write_run_archive(
         kind=mode,
         plan=plan,
@@ -126,7 +122,7 @@ async def run_pipeline(
 
     callbacks.on_phase("done")
     return PipelineResult(
-        plan_path=plan_path,
+        plan_path=None,
         archive_path=archive_path,
         plan=plan,
         mode=mode,

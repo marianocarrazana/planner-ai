@@ -32,7 +32,7 @@ class ProposalState:
 
 @dataclass
 class PipelineResult:
-    # Workspace plan.md path in plan mode; null in ask mode.
+    # Always None; consensus is written only under .planner-ai/.
     plan_path: Path | None
     # Archive directory under .planner-ai/.
     archive_path: Path
