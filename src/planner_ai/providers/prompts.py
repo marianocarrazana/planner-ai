@@ -124,6 +124,68 @@ def ask_consensus_user_prompt(
     )
 
 
+IMPROVE_PROPOSE_SYSTEM = " ".join(
+    [
+        "You are a senior advisor auditing a codebase for possible improvements.",
+        "Inspect the given working directory with read-only tools.",
+        "Do not use any other workspace, home-directory project, or editor context.",
+        "Survey code quality, documentation, security, bugs, and fixes within the user's scope.",
+        "Return a prioritized markdown list of possible improvements; for each item include brief evidence, impact, and effort.",
+        "Interpret the scope yourself (for example last commits, commits in this branch, whole repo, or a custom focus) using your own tools.",
+        "Do not implement changes. Do not edit or write files.",
+        "Do not include preamble or closing chatter — only the improvements markdown.",
+    ]
+)
+
+
+def improve_propose_user_prompt(scope: str, cwd: str) -> str:
+    return "\n".join(
+        [
+            f"Working directory:\n{cwd}",
+            "",
+            f"Scope:\n{scope}",
+            "",
+            "Interpret this scope with your own tools, then propose a prioritized markdown list of possible improvements.",
+        ]
+    )
+
+
+IMPROVE_CONSENSUS_SYSTEM = " ".join(
+    [
+        "You reconcile multiple improvement audits into one prioritized list for the given working directory.",
+        "Inspect that directory with read-only tools when you need to check proposals against the code.",
+        "Do not use any other workspace, home-directory project, or editor context.",
+        "Prefer overlap across proposals; put leftover disagreements in Notes.",
+        "Output only markdown suitable for improvements.md — a prioritized improvement list, not a plan with Goal/Consensus/Steps and not a Q&A answer.",
+        "Do not edit or write files. No preamble or closing chatter.",
+    ]
+)
+
+
+def improve_consensus_user_prompt(
+    scope: str,
+    cwd: str,
+    proposals: Sequence[ProposalRef],
+) -> str:
+    blocks = "\n\n".join(
+        f"### Improvements: {p['id']}\n\n{p['body'].strip()}" for p in proposals
+    )
+
+    return "\n".join(
+        [
+            f"Working directory:\n{cwd}",
+            "",
+            f"Scope:\n{scope}",
+            "",
+            "Proposals:",
+            "",
+            blocks,
+            "",
+            "Merge these into a single improvements.md markdown document for this directory.",
+        ]
+    )
+
+
 @dataclass(frozen=True)
 class ResolvedPrompts:
     system: str
@@ -139,6 +201,11 @@ def resolve_propose_prompts(
         return ResolvedPrompts(
             system=ASK_PROPOSE_SYSTEM,
             user=ask_propose_user_prompt(goal, cwd),
+        )
+    if mode == "improve":
+        return ResolvedPrompts(
+            system=IMPROVE_PROPOSE_SYSTEM,
+            user=improve_propose_user_prompt(goal, cwd),
         )
     return ResolvedPrompts(
         system=PROPOSE_SYSTEM,
@@ -156,6 +223,11 @@ def resolve_consensus_prompts(
         return ResolvedPrompts(
             system=ASK_CONSENSUS_SYSTEM,
             user=ask_consensus_user_prompt(goal, cwd, proposals),
+        )
+    if mode == "improve":
+        return ResolvedPrompts(
+            system=IMPROVE_CONSENSUS_SYSTEM,
+            user=improve_consensus_user_prompt(goal, cwd, proposals),
         )
     return ResolvedPrompts(
         system=CONSENSUS_SYSTEM,

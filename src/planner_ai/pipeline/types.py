@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-RunMode = Literal["plan", "ask"]
+RunMode = Literal["plan", "ask", "improve"]
 
 Phase = Literal[
     "idle",
@@ -36,7 +36,7 @@ class PipelineResult:
     plan_path: Path | None
     # Archive directory under .planner-ai/.
     archive_path: Path
-    # Consensus markdown (plan or answer).
+    # Consensus markdown (plan, answer, or improvements).
     plan: str
     mode: RunMode
     proposals: list[ProposalState]

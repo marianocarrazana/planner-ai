@@ -1,6 +1,6 @@
 # Planner AI
 
-Multi-agent terminal UI: several independent proposer agents inspect the workspace in parallel (each on a model you pick), then a separate consensus agent reconciles their outputs into one plan or answer. Plan mode archives `plan.md` under `.planner-ai/`; Ask mode archives a Q&A answer. It plans and answers; it does not execute.
+Multi-agent terminal UI: several independent proposer agents inspect the workspace in parallel (each on a model you pick), then a separate consensus agent reconciles their outputs into one plan, answer, or improvements list. Plan mode archives `plan.md` under `.planner-ai/`; Ask mode archives a Q&A answer; Improve mode archives a prioritized improvements list. It plans, answers, and audits; it does not execute.
 
 It is both **multi-model** (Claude, Grok, GPT, Gemini, etc) and **multi-agent** (one agent per proposer, plus a consensus agent—not a single agent that fans out to several models).
 
@@ -77,11 +77,12 @@ planner --reset-auth
 
 ## What it does
 
-- Plans/asks against the folder you launched the CLI in (`cwd`)
+- Plans/asks/improves against the folder you launched the CLI in (`cwd`)
 - Runs several proposer agents in parallel, each on a different model (one failure does not cancel the others)
 - Runs a separate consensus agent (on its own model) to reconcile those proposals
 - **Plan mode:** archives the consensus plan under `.planner-ai/plan-…/` (does **not** write cwd `plan.md`)
 - **Ask mode:** same multi-agent proposer + consensus flow with Q&A prompts; archives under `.planner-ai/ask-…/`
+- **Improve mode:** same flow with audit prompts; required free-text scope (suggestion chips: Last commits / Commits in this branch / Whole repo); agents interpret the scope themselves; archives under `.planner-ai/improve-…/`
 
 ## TUI
 
@@ -89,7 +90,7 @@ Fullscreen alternate-screen UI with tabs:
 
 | Tab | Shortcut | What it does |
 | --- | --- | --- |
-| **Plan** | `Ctrl+1` | Plan/Ask toggle, enter a goal or question, watch proposals / consensus, browse the result |
+| **Plan** | `Ctrl+1` | Plan/Ask/Improve toggle, enter a goal, question, or scope, watch proposals / consensus, browse the result |
 | **Proposers** | `Ctrl+2` | Pick proposer models (multi) — Claude / Cursor / Codex / Mock |
 | **Consensus** | `Ctrl+3` | Pick the consensus model (single) |
 | **Auth** | `Ctrl+4` | Set or clear Claude OAuth / Cursor / Codex API keys |
@@ -101,16 +102,16 @@ Startup opens **Auth** if no real credential is set, else **Proposers** if there
 
 ## How it works
 
-1. You provide a goal (Plan) or question (Ask) on the Plan tab.
+1. You provide a goal (Plan), question (Ask), or scope (Improve) on the Plan tab.
 2. Each proposer agent inspects the current working directory (read-only) with its own tools and proposes independently.
-3. A consensus agent inspects the workspace and reconciles those proposals into one plan or answer.
-4. Both modes archive under `.planner-ai/` (`plan.md` or `answer.md`).
+3. A consensus agent inspects the workspace and reconciles those proposals into one plan, answer, or improvements list.
+4. All modes archive under `.planner-ai/` (`plan.md`, `answer.md`, or `improvements.md`).
 
 ```mermaid
 flowchart LR
-  Goal[Goal or question] --> Proposers[Proposer agents in parallel]
+  Goal[Goal question or scope] --> Proposers[Proposer agents in parallel]
   Proposers --> Consensus[Consensus agent]
-  Consensus --> Plan[plan.md or answer.md archive]
+  Consensus --> Plan[plan.md answer.md or improvements.md archive]
 ```
 
 ## Output
@@ -127,12 +128,16 @@ Each successful run is archived under `.planner-ai/`:
   ask-2026-08-13T16-49-00/
     cursor-composer-2.5-output.md
     answer.md
+  improve-2026-08-13T16-50-00/
+    cursor-composer-2.5-output.md
+    improvements.md
 ```
 
 - Plan runs: `plan-{YYYY-MM-DDTHH-MM-SS}/` with per-model `*-output.md` and consensus `plan.md`
 - Ask runs: `ask-{YYYY-MM-DDTHH-MM-SS}/` with per-model `*-output.md` and consensus `answer.md`
+- Improve runs: `improve-{YYYY-MM-DDTHH-MM-SS}/` with per-model `*-output.md` and consensus `improvements.md`
 - Collision dirs: `plan-{ts}-2`, `plan-{ts}-3`, …
-- History lists both kinds newest-first (by timestamp, not full dirname)
+- History lists all kinds newest-first (by timestamp, not full dirname)
 
 Archives written by the TypeScript app remain readable.
 

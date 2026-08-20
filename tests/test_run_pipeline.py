@@ -114,6 +114,34 @@ def test_ask_mode_no_cwd_plan(tmp_path: Path) -> None:
     assert result.plan.startswith("# Answer\n")
 
 
+def test_improve_mode_archives_improvements(tmp_path: Path) -> None:
+    callbacks, phases, _ = _callbacks()
+
+    async def run():
+        return await run_pipeline(
+            "Last commits",
+            _alpha_beta(),
+            mock_consensus,
+            callbacks,
+            options=ProviderCallOptions(mode="improve"),
+            cwd=tmp_path,
+        )
+
+    result = asyncio.run(run())
+
+    assert result.mode == "improve"
+    assert result.plan_path is None
+    assert not (tmp_path / PLAN_FILENAME).exists()
+    assert result.archive_path.name.startswith("improve-")
+    assert (
+        result.archive_path / "improvements.md"
+    ).read_text(encoding="utf-8") == result.plan
+    assert not (result.archive_path / "plan.md").exists()
+    assert not (result.archive_path / "answer.md").exists()
+    assert phases == ["proposing", "consensus", "writing", "done"]
+    assert result.plan.startswith("# Improvements\n")
+
+
 def test_partial_failure_still_runs_consensus(tmp_path: Path) -> None:
     callbacks, _, _ = _callbacks()
     alpha = next(p for p in mock_proposers if p.id == "alpha")
@@ -175,6 +203,24 @@ def test_empty_goal_ask_mode(tmp_path: Path) -> None:
     assert phases == ["error"]
 
 
+def test_empty_scope_improve_mode(tmp_path: Path) -> None:
+    callbacks, phases, _ = _callbacks()
+
+    async def run():
+        await run_pipeline(
+            "  ",
+            _alpha_beta(),
+            mock_consensus,
+            callbacks,
+            options=ProviderCallOptions(mode="improve"),
+            cwd=tmp_path,
+        )
+
+    with pytest.raises(ValueError, match=r"^Scope is required$"):
+        asyncio.run(run())
+    assert phases == ["error"]
+
+
 def test_all_proposals_failed(tmp_path: Path) -> None:
     callbacks, phases, _ = _callbacks()
 
@@ -206,6 +252,24 @@ def test_all_answers_failed(tmp_path: Path) -> None:
         )
 
     with pytest.raises(ValueError, match=r"^All answers failed$"):
+        asyncio.run(run())
+    assert phases == ["proposing", "error"]
+
+
+def test_all_improvement_proposals_failed(tmp_path: Path) -> None:
+    callbacks, phases, _ = _callbacks()
+
+    async def run():
+        await run_pipeline(
+            "Whole repo",
+            [FailingProposer()],
+            mock_consensus,
+            callbacks,
+            options=ProviderCallOptions(mode="improve"),
+            cwd=tmp_path,
+        )
+
+    with pytest.raises(ValueError, match=r"^All improvement proposals failed$"):
         asyncio.run(run())
     assert phases == ["proposing", "error"]
 

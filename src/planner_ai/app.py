@@ -34,7 +34,11 @@ from planner_ai.providers.types import ProviderCallOptions
 from planner_ai.ui.auth_screen import AuthScreen
 from planner_ai.ui.history_screen import HistoryScreen
 from planner_ai.ui.model_select import ModelSelect
-from planner_ai.ui.plan_helpers import has_any_real_credential, plan_gate
+from planner_ai.ui.plan_helpers import (
+    has_any_real_credential,
+    header_prefix,
+    plan_gate,
+)
 from planner_ai.ui.plan_screen import PlanScreen
 from planner_ai.ui.tabs import (
     TABS,
@@ -181,8 +185,7 @@ class PlannerApp(App[None]):
     def _refresh_header(self) -> None:
         parts = [str(get_workspace_cwd())]
         if self.goal:
-            prefix = "Question" if self.run_mode == "ask" else "Goal"
-            parts.append(f"{prefix}: {self.goal}")
+            parts.append(f"{header_prefix(self.run_mode)}: {self.goal}")
         self.sub_title = " · ".join(parts)
 
     def _failing_labels(self) -> list[str]:

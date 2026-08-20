@@ -65,6 +65,7 @@ def test_consensus_copy() -> None:
     assert consensus_title(writing=False, mode="plan") == "Consensus"
     assert consensus_title(writing=True, mode="plan") == "Writing plan"
     assert consensus_title(writing=True, mode="ask") == "Saving answer"
+    assert consensus_title(writing=True, mode="improve") == "Saving improvements"
     assert (
         consensus_body(writing=False, mode="plan")
         == "Reconciling proposals into one plan…"
@@ -77,8 +78,13 @@ def test_consensus_copy() -> None:
         consensus_body(writing=False, mode="ask")
         == "Reconciling answers into one response…"
     )
+    assert (
+        consensus_body(writing=False, mode="improve")
+        == "Reconciling proposals into one improvements list…"
+    )
     assert consensus_body(writing=True, mode="plan") == "Archiving plan…"
     assert consensus_body(writing=True, mode="ask") == "Archiving answer…"
+    assert consensus_body(writing=True, mode="improve") == "Archiving improvements…"
 
 
 def test_error_hint() -> None:
@@ -87,6 +93,7 @@ def test_error_hint() -> None:
         failing_labels=["Cursor API key"],
     )
     assert "ask another" in error_hint(mode="ask", failing_labels=[])
+    assert "improve another" in error_hint(mode="improve", failing_labels=[])
     assert "Press r" not in error_hint(mode="plan", failing_labels=[])
 
 
@@ -237,13 +244,25 @@ def test_plan_ask_toggle(
             assert consensus.region.y > proposers.region.y
             assert str(proposers.render()).startswith("proposers:")
             assert str(consensus.render()).startswith("consensus:")
+            assert "-hidden" in app.query_one("#scope-row").classes
             await pilot.click("#pill-ask")
             await pilot.pause()
             assert app.run_mode == "ask"
             assert "ask" in str(app.query_one("#goal-prompt", Static).render()).lower()
+            assert "-hidden" in app.query_one("#scope-row").classes
             # Header goal hidden until submit
             assert "Goal:" not in app.sub_title
             assert "Question:" not in app.sub_title
+            await pilot.click("#pill-improve")
+            await pilot.pause()
+            assert app.run_mode == "improve"
+            assert "scope" in str(app.query_one("#goal-prompt", Static).render()).lower()
+            assert "-hidden" not in app.query_one("#scope-row").classes
+            await pilot.click("#chip-this-branch")
+            await pilot.pause()
+            assert (
+                app.query_one("#goal-field", Input).value == "Commits in this branch"
+            )
 
     asyncio.run(run())
 
@@ -324,6 +343,49 @@ def test_mock_ask_run_no_plan_md(
             archives = list((ws / ".planner-ai").glob("ask-*"))
             assert len(archives) == 1
             assert (archives[0] / "answer.md").exists()
+
+    asyncio.run(run())
+
+
+def test_mock_improve_run(
+    config_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ws = _workspace(tmp_path, monkeypatch)
+    _noop_sleep(monkeypatch)
+    _mock_choices(monkeypatch)
+    save_config(
+        {
+            "cursorApiKey": "dummy",
+            "includeMocks": True,
+            "modelSelection": MOCK_SELECTION,
+        }
+    )
+
+    async def run() -> None:
+        app = PlannerApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.click("#pill-improve")
+            await pilot.pause()
+            await pilot.click("#chip-whole-repo")
+            await pilot.pause()
+            field = app.query_one("#goal-field", Input)
+            assert field.value == "Whole repo"
+            field.focus()
+            await pilot.press("enter")
+            for _ in range(50):
+                if app.phase == "done":
+                    break
+                await pilot.pause()
+            assert app.phase == "done"
+            assert app.run_mode == "improve"
+            assert "Scope: Whole repo" in app.sub_title
+            rb = app.query_one(ResultBrowser)
+            assert "Improvements ready" in str(rb.query_one("#rb-heading").render())
+            assert not (ws / "plan.md").exists()
+            archives = list((ws / ".planner-ai").glob("improve-*"))
+            assert len(archives) == 1
+            assert (archives[0] / "improvements.md").exists()
 
     asyncio.run(run())
 

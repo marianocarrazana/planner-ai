@@ -10,7 +10,14 @@ from planner_ai.workspace import get_workspace_cwd
 ARCHIVE_DIR = ".planner-ai"
 PLAN_FILENAME = "plan.md"
 ANSWER_FILENAME = "answer.md"
+IMPROVEMENTS_FILENAME = "improvements.md"
 OUTPUT_SUFFIX = "-output.md"
+
+PRIMARY_DOC_BY_KIND: dict[RunMode, str] = {
+    "plan": PLAN_FILENAME,
+    "ask": ANSWER_FILENAME,
+    "improve": IMPROVEMENTS_FILENAME,
+}
 
 
 def format_run_timestamp(when: datetime | None = None) -> str:
@@ -25,7 +32,7 @@ def sanitize_model_id(model_id: str) -> str:
 
 
 def primary_doc_filename(kind: RunMode) -> str:
-    return ANSWER_FILENAME if kind == "ask" else PLAN_FILENAME
+    return PRIMARY_DOC_BY_KIND.get(kind, PLAN_FILENAME)
 
 
 def _allocate_run_dir(archive_root: Path, kind: RunMode, timestamp: str) -> Path:

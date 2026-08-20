@@ -49,16 +49,25 @@ def test_list_newest_first_and_collision(tmp_path: Path) -> None:
         cwd=tmp_path,
         date=LATER,
     )
+    write_run_archive(
+        kind="improve",
+        plan="newer",
+        proposals=[_done("c")],
+        cwd=tmp_path,
+        date=datetime(2026, 8, 13, 16, 50, 0),
+    )
 
     runs = list_archived_runs(cwd=tmp_path)
     assert [r.dir_name for r in runs] == [
+        "improve-2026-08-13T16-50-00",
         "ask-2026-08-13T16-49-00",
         "plan-2026-08-13T16-48-00-2",
         "plan-2026-08-13T16-48-00",
     ]
-    assert runs[0].kind == "ask"
-    assert runs[1].timestamp_label == "2026-08-13 16:48:00 (2)"
-    assert runs[2].timestamp_label == "2026-08-13 16:48:00"
+    assert runs[0].kind == "improve"
+    assert runs[1].kind == "ask"
+    assert runs[2].timestamp_label == "2026-08-13 16:48:00 (2)"
+    assert runs[3].timestamp_label == "2026-08-13 16:48:00"
     assert runs[0].output_count == 1
 
 
@@ -135,6 +144,30 @@ def test_read_fallback_plan_with_answer_md(tmp_path: Path) -> None:
     archived = read_archived_run(run_dir)
     assert archived.kind == "plan"
     assert archived.plan == "legacy answer body"
+
+
+def test_read_fallback_improve_with_plan_md(tmp_path: Path) -> None:
+    run_dir = tmp_path / ARCHIVE_DIR / "improve-2026-08-13T16-48-00"
+    run_dir.mkdir(parents=True)
+    (run_dir / "plan.md").write_text("legacy plan body", encoding="utf-8")
+
+    archived = read_archived_run(run_dir)
+    assert archived.kind == "improve"
+    assert archived.plan == "legacy plan body"
+
+
+def test_read_improve_primary(tmp_path: Path) -> None:
+    run_dir = write_run_archive(
+        kind="improve",
+        plan="# Improvements\n",
+        proposals=[_done("alpha", "# Findings\n")],
+        cwd=tmp_path,
+        date=FIXED,
+    )
+    archived = read_archived_run(run_dir)
+    assert archived.kind == "improve"
+    assert archived.plan == "# Improvements\n"
+    assert archived.proposals[0].body == "# Findings\n"
 
 
 def test_read_both_primary_missing(tmp_path: Path) -> None:

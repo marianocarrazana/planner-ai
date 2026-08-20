@@ -81,9 +81,47 @@ def status_color(status: ProposalStatus) -> str:
             return "red"
 
 
+def header_prefix(mode: RunMode) -> str:
+    if mode == "ask":
+        return "Question"
+    if mode == "improve":
+        return "Scope"
+    return "Goal"
+
+
+def primary_tab_label(mode: RunMode) -> str:
+    if mode == "ask":
+        return "Answer"
+    if mode == "improve":
+        return "Improvements"
+    return "Plan"
+
+
+def ready_heading(mode: RunMode) -> str:
+    if mode == "ask":
+        return "Answer ready"
+    if mode == "improve":
+        return "Improvements ready"
+    return "Plan ready"
+
+
+def another_label(mode: RunMode, *, capitalize: bool = False) -> str:
+    if mode == "ask":
+        label = "ask another"
+    elif mode == "improve":
+        label = "improve another"
+    else:
+        label = "plan another"
+    return label.capitalize() if capitalize else label
+
+
 def consensus_title(*, writing: bool, mode: RunMode) -> str:
     if writing:
-        return "Saving answer" if mode == "ask" else "Writing plan"
+        if mode == "ask":
+            return "Saving answer"
+        if mode == "improve":
+            return "Saving improvements"
+        return "Writing plan"
     return "Consensus"
 
 
@@ -93,14 +131,20 @@ def consensus_body(
     mode: RunMode,
     elapsed_seconds: int | None = None,
 ) -> str:
-    is_ask = mode == "ask"
     if writing:
-        return "Archiving answer…" if is_ask else "Archiving plan…"
-    base = (
-        "Reconciling answers into one response…"
-        if is_ask
-        else "Reconciling proposals into one plan…"
-    )
+        if mode == "ask":
+            base = "Archiving answer…"
+        elif mode == "improve":
+            base = "Archiving improvements…"
+        else:
+            base = "Archiving plan…"
+        return base
+    if mode == "ask":
+        base = "Reconciling answers into one response…"
+    elif mode == "improve":
+        base = "Reconciling proposals into one improvements list…"
+    else:
+        base = "Reconciling proposals into one plan…"
     if elapsed_seconds is not None:
         return f"{base} {format_elapsed_seconds(elapsed_seconds)}"
     return base
@@ -111,7 +155,7 @@ def error_hint(
     mode: RunMode,
     failing_labels: list[str],
 ) -> str:
-    another = "ask another" if mode == "ask" else "plan another"
+    another = another_label(mode)
     if failing_labels:
         joined = " and ".join(failing_labels)
         return (

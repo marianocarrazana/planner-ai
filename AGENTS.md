@@ -4,7 +4,7 @@ Agent notes for the Python port under `planner-ai/`. Product rules match the rep
 
 ## Project
 
-Terminal UI (Textual) that asks several models for a plan or answer in parallel, reconciles via a consensus model, and archives `plan.md` (Plan mode) or `answer.md` (Ask mode) under `.planner-ai/`. It plans/answers; it does not execute.
+Terminal UI (Textual) that asks several models for a plan, answer, or improvements list in parallel, reconciles via a consensus model, and archives `plan.md` (Plan mode), `answer.md` (Ask mode), or `improvements.md` (Improve mode) under `.planner-ai/`. It plans/answers/audits; it does not execute.
 
 ## Stack
 
@@ -49,15 +49,17 @@ tests/
 - Keep changes scoped; match existing naming and widget style.
 - Provider surface: `ModelProvider.propose` and `ConsensusProvider.reconcile` in `providers/types.py`.
 - Wire new models through `providers/models.py` and `providers/resolve.py`.
-- Prompts live in `providers/prompts.py`; keep them read-only over the workspace. Plan vs Ask via `ProviderCallOptions.mode`.
+- Prompts live in `providers/prompts.py`; keep them read-only over the workspace. Plan vs Ask vs Improve via `ProviderCallOptions.mode`.
 - Credentials belong only in the OS config path from `config.py` — never commit tokens, never log them.
 - Sanitize pasted tokens with `sanitize_token` before persist/use.
 - Plan mode: consensus artifact is `.planner-ai/plan-{timestamp}/plan.md`; does not write cwd `plan.md`.
 - Ask mode: Plan tab toggle; same multi-proposer + consensus flow with Q&A prompts; does not write cwd `plan.md`.
+- Improve mode: Plan tab toggle; required free-text scope (suggestion chips: Last commits / Commits in this branch / Whole repo); prompt-only — agents interpret scope themselves; does not write cwd root files.
 - Each successful run is archived under `.planner-ai/`:
   - Plan: `plan-{YYYY-MM-DDTHH-MM-SS}/` with per-model `*-output.md` and `plan.md`
   - Ask: `ask-{YYYY-MM-DDTHH-MM-SS}/` with per-model `*-output.md` and `answer.md`
-  - History lists both kinds newest-first (sorted by timestamp, not full dirname).
+  - Improve: `improve-{YYYY-MM-DDTHH-MM-SS}/` with per-model `*-output.md` and `improvements.md`
+  - History lists all kinds newest-first (sorted by timestamp, not full dirname).
 
 ## Boundaries
 

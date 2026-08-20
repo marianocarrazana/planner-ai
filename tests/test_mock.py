@@ -42,6 +42,19 @@ def test_mock_propose_ask_mode() -> None:
     assert "## Take (breadth-first)" in body
 
 
+def test_mock_propose_improve_mode() -> None:
+    async def run() -> str:
+        return await _alpha().propose(
+            "Commits in this branch",
+            ProviderCallOptions(mode="improve"),
+        )
+
+    body = asyncio.run(run())
+    assert body.startswith("# Improvements from Model Alpha\n")
+    assert "Scope: Commits in this branch" in body
+    assert "## Findings (breadth-first)" in body
+
+
 def test_mock_reconcile_plan_mode() -> None:
     async def run() -> str:
         return await mock_consensus.reconcile(
@@ -72,6 +85,21 @@ def test_mock_reconcile_ask_mode() -> None:
     assert "## Question\n\nWhat is X?\n" in body
     assert "## Response" in body
     assert "free of a planning template" in body
+
+
+def test_mock_reconcile_improve_mode() -> None:
+    async def run() -> str:
+        return await mock_consensus.reconcile(
+            "Whole repo",
+            [{"id": "alpha", "body": "a"}],
+            ProviderCallOptions(mode="improve"),
+        )
+
+    body = asyncio.run(run())
+    assert body.startswith("# Improvements\n")
+    assert "## Scope\n\nWhole repo\n" in body
+    assert "## Prioritized list" in body
+    assert "## Notes" in body
 
 
 def test_mock_propose_timeout_cancels_sleep() -> None:

@@ -18,6 +18,7 @@ from textual.widgets import ContentSwitcher, Markdown, OptionList, Static, Tab
 
 FIXED = datetime(2026, 8, 13, 16, 48, 0)
 LATER = datetime(2026, 8, 13, 16, 49, 0)
+IMPROVE_TIME = datetime(2026, 8, 13, 16, 50, 0)
 
 
 @pytest.fixture
@@ -116,6 +117,13 @@ def test_history_lists_plan_and_ask_newest_first(
         cwd=ws,
         date=LATER,
     )
+    write_run_archive(
+        kind="improve",
+        plan="# improvements body",
+        proposals=[_done("c")],
+        cwd=ws,
+        date=IMPROVE_TIME,
+    )
 
     async def run() -> None:
         app = PlannerApp()
@@ -124,17 +132,19 @@ def test_history_lists_plan_and_ask_newest_first(
             await pilot.press("ctrl+5")
             for _ in range(20):
                 hist = app.query_one("#history", HistoryScreen)
-                if len(hist._runs) == 2:
+                if len(hist._runs) == 3:
                     break
                 await pilot.pause()
             hist = app.query_one("#history", HistoryScreen)
-            assert [r.kind for r in hist._runs] == ["ask", "plan"]
+            assert [r.kind for r in hist._runs] == ["improve", "ask", "plan"]
             rows = hist.query_one("#hist-rows", OptionList)
-            assert rows.option_count == 2
+            assert rows.option_count == 3
             text0 = str(rows.get_option_at_index(0).prompt)
             text1 = str(rows.get_option_at_index(1).prompt)
-            assert "ask" in text0
-            assert "plan" in text1
+            text2 = str(rows.get_option_at_index(2).prompt)
+            assert "improve" in text0
+            assert "ask" in text1
+            assert "plan" in text2
             assert "2026-08-13" in text0
 
     asyncio.run(run())

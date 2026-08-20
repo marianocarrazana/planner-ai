@@ -66,6 +66,23 @@ def test_write_ask_archive_no_cwd_plan(tmp_path: Path) -> None:
     assert not (tmp_path / PLAN_FILENAME).exists()
 
 
+def test_write_improve_archive(tmp_path: Path) -> None:
+    run_dir = write_run_archive(
+        kind="improve",
+        plan="# Improvements\n",
+        proposals=[_done("alpha")],
+        cwd=tmp_path,
+        date=FIXED,
+    )
+    assert run_dir.name.startswith("improve-")
+    assert (
+        run_dir / "improvements.md"
+    ).read_text(encoding="utf-8") == "# Improvements\n"
+    assert not (run_dir / "plan.md").exists()
+    assert not (run_dir / "answer.md").exists()
+    assert not (tmp_path / PLAN_FILENAME).exists()
+
+
 def test_collision_suffix(tmp_path: Path) -> None:
     first = write_run_archive(
         kind="plan",

@@ -12,7 +12,7 @@ from textual.widgets import ContentSwitcher, Static
 from planner_ai.pipeline.types import Phase, ProposalState, RunMode
 from planner_ai.ui.consensus_view import ConsensusView
 from planner_ai.ui.goal_input import GoalInput
-from planner_ai.ui.plan_helpers import PlanGate, error_hint
+from planner_ai.ui.plan_helpers import PlanGate, another_label, error_hint
 from planner_ai.ui.proposal_list import ProposalList
 from planner_ai.ui.result_browser import ResultBrowser
 
@@ -162,7 +162,7 @@ class PlanScreen(Widget):
             with Vertical(id="need-models"):
                 yield Static("Plan", id="gate-title-models")
                 yield Static(
-                    "Select proposers and a consensus model before running a plan or ask.",
+                    "Select proposers and a consensus model before running a plan, ask, or improve.",
                     id="gate-body-models",
                     classes="gate-body",
                 )
@@ -285,7 +285,7 @@ class PlanScreen(Widget):
                 error_list.sync(self._proposals)
             else:
                 error_list.add_class("-hidden")
-            another = "Ask another" if self._mode == "ask" else "Plan another"
+            another = another_label(self._mode, capitalize=True)
             self.query_one("#error-back", PlanLink).update(
                 f"→ {another} (or press Esc)"
             )

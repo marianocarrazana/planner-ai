@@ -13,9 +13,15 @@ from planner_ai.ui.plan_helpers import format_consensus_source, format_proposer_
 if TYPE_CHECKING:
     from planner_ai.app import PlannerApp
 
+SCOPE_SUGGESTIONS = (
+    ("Last commits", "chip-last-commits"),
+    ("Commits in this branch", "chip-this-branch"),
+    ("Whole repo", "chip-whole-repo"),
+)
+
 
 class ModePill(Static):
-    """Clickable Plan / Ask mode toggle pill."""
+    """Clickable Plan / Ask / Improve mode toggle pill."""
 
     def __init__(self, mode: RunMode, label: str, *, id: str | None = None) -> None:
         super().__init__(f" {label} ", id=id)
@@ -31,8 +37,25 @@ class ModePill(Static):
             parent = parent.parent
 
 
+class ScopeChip(Static):
+    """Clickable scope suggestion that fills the input field."""
+
+    def __init__(self, label: str, *, id: str | None = None) -> None:
+        super().__init__(f" {label} ", id=id)
+        self.label = label
+        self.can_focus = False
+
+    def on_click(self) -> None:
+        parent = self.parent
+        while parent is not None:
+            if isinstance(parent, GoalInput):
+                parent.apply_scope_suggestion(self.label)
+                return
+            parent = parent.parent
+
+
 class GoalInput(Widget):
-    """Plan/Ask toggle, goal/question input, and selected models."""
+    """Plan/Ask/Improve toggle, goal/question/scope input, and selected models."""
 
     DEFAULT_CSS = """
     GoalInput {
@@ -44,6 +67,16 @@ class GoalInput(Widget):
         height: 1;
         layout: horizontal;
         margin-top: 1;
+    }
+
+    GoalInput #scope-row {
+        height: 1;
+        layout: horizontal;
+        margin-top: 1;
+    }
+
+    GoalInput #scope-row.-hidden {
+        display: none;
     }
 
     GoalInput #goal-models {
@@ -72,6 +105,17 @@ class GoalInput(Widget):
     GoalInput ModePill.-active {
         color: black;
         background: cyan;
+    }
+
+    GoalInput ScopeChip {
+        width: auto;
+        height: 1;
+        margin-right: 2;
+        color: #888888;
+    }
+
+    GoalInput ScopeChip:hover {
+        color: cyan;
     }
 
     GoalInput #goal-prompt {
@@ -119,6 +163,10 @@ class GoalInput(Widget):
         with Horizontal(id="mode-row"):
             yield ModePill("plan", "Plan", id="pill-plan")
             yield ModePill("ask", "Ask", id="pill-ask")
+            yield ModePill("improve", "Improve", id="pill-improve")
+        with Horizontal(id="scope-row", classes="-hidden"):
+            for label, chip_id in SCOPE_SUGGESTIONS:
+                yield ScopeChip(label, id=chip_id)
         with Vertical(id="goal-models", classes="-hidden"):
             yield Static("", id="goal-proposers")
             yield Static("", id="goal-consensus")
@@ -131,14 +179,24 @@ class GoalInput(Widget):
         self._mode = mode
         self.query_one("#pill-plan", ModePill).set_class(mode == "plan", "-active")
         self.query_one("#pill-ask", ModePill).set_class(mode == "ask", "-active")
+        self.query_one("#pill-improve", ModePill).set_class(
+            mode == "improve", "-active"
+        )
         prompt = self.query_one("#goal-prompt", Static)
         field = self.query_one("#goal-field", Input)
+        scope_row = self.query_one("#scope-row")
         if mode == "ask":
             prompt.update("What do you want to ask?")
             field.placeholder = "Ask a question…"
+            scope_row.add_class("-hidden")
+        elif mode == "improve":
+            prompt.update("What scope should we audit?")
+            field.placeholder = "Describe the scope…"
+            scope_row.remove_class("-hidden")
         else:
             prompt.update("What goal should we plan for?")
             field.placeholder = "Describe the goal…"
+            scope_row.add_class("-hidden")
 
     def sync_models(self) -> None:
         models = self.query_one("#goal-models")
@@ -159,6 +217,11 @@ class GoalInput(Widget):
     def set_mode(self, mode: RunMode) -> None:
         self.planner_app.set_run_mode(mode)
         self.sync_mode(mode)
+
+    def apply_scope_suggestion(self, label: str) -> None:
+        field = self.query_one("#goal-field", Input)
+        field.value = label
+        field.focus()
 
     def focus_input(self) -> None:
         self.query_one("#goal-field", Input).focus()

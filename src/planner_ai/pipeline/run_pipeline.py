@@ -20,6 +20,22 @@ from planner_ai.providers.types import (
 from planner_ai.write_run_archive import write_run_archive
 
 
+def required_input_error(mode: RunMode) -> str:
+    if mode == "ask":
+        return "Question is required"
+    if mode == "improve":
+        return "Scope is required"
+    return "Goal is required"
+
+
+def all_failed_error(mode: RunMode) -> str:
+    if mode == "ask":
+        return "All answers failed"
+    if mode == "improve":
+        return "All improvement proposals failed"
+    return "All proposals failed"
+
+
 async def run_pipeline(
     goal: str,
     proposers: list[ModelProvider],
@@ -41,9 +57,7 @@ async def run_pipeline(
     trimmed = goal.strip()
     if not trimmed:
         callbacks.on_phase("error")
-        raise ValueError(
-            "Question is required" if mode == "ask" else "Goal is required"
-        )
+        raise ValueError(required_input_error(mode))
 
     proposals: list[ProposalState] = [
         ProposalState(id=p.id, label=p.label, status="pending") for p in proposers
@@ -103,9 +117,7 @@ async def run_pipeline(
 
     if len(successful) == 0:
         callbacks.on_phase("error")
-        raise ValueError(
-            "All answers failed" if mode == "ask" else "All proposals failed"
-        )
+        raise ValueError(all_failed_error(mode))
 
     callbacks.on_phase("consensus")
     if callbacks.on_consensus_started is not None:

@@ -28,7 +28,8 @@ class MockProposer:
         finally:
             abort.cleanup()
 
-        if options is not None and options.mode == "ask":
+        mode = options.mode if options is not None else None
+        if mode == "ask":
             return "\n".join(
                 [
                     f"# Answer from {self.label}",
@@ -43,6 +44,22 @@ class MockProposer:
                     f"- Ground the reply in the working directory ({self.angle})",
                     "- Prefer concrete references over speculation",
                     "- Call out unknowns when the code is unclear",
+                    "",
+                ]
+            )
+        if mode == "improve":
+            return "\n".join(
+                [
+                    f"# Improvements from {self.label}",
+                    "",
+                    f"Scope: {goal}",
+                    "",
+                    f"## Findings ({self.angle})",
+                    "",
+                    f"1. Harden error handling around the scoped area ({self.angle})",
+                    "2. Clarify docs where behavior is ambiguous",
+                    "3. Review security-sensitive paths for missing checks",
+                    "4. Add tests for the highest-risk edge cases",
                     "",
                 ]
             )
@@ -78,7 +95,8 @@ class MockConsensus:
             abort.cleanup()
 
         sources = "\n".join(f"- {p['id']}" for p in proposals)
-        if options is not None and options.mode == "ask":
+        mode = options.mode if options is not None else None
+        if mode == "ask":
             return "\n".join(
                 [
                     "# Answer",
@@ -96,6 +114,31 @@ class MockConsensus:
                     "grounded in the workspace and free of a planning template.",
                     "",
                     "This answer was produced by planner-ai consensus (mock).",
+                    "",
+                ]
+            )
+        if mode == "improve":
+            return "\n".join(
+                [
+                    "# Improvements",
+                    "",
+                    "## Scope",
+                    "",
+                    goal,
+                    "",
+                    "## Prioritized list",
+                    "",
+                    "Merged from the following proposals:",
+                    sources,
+                    "",
+                    "1. Fix the highest-confidence bugs in scope",
+                    "2. Address security gaps with clear evidence",
+                    "3. Improve docs where they mislead contributors",
+                    "4. Reduce tech debt that blocks the above",
+                    "",
+                    "## Notes",
+                    "",
+                    "This improvements list was produced by planner-ai consensus (mock).",
                     "",
                 ]
             )

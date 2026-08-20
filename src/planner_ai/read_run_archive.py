@@ -9,13 +9,20 @@ from planner_ai.workspace import get_workspace_cwd
 from planner_ai.write_run_archive import (
     ANSWER_FILENAME,
     ARCHIVE_DIR,
+    IMPROVEMENTS_FILENAME,
     OUTPUT_SUFFIX,
     PLAN_FILENAME,
     primary_doc_filename,
 )
 
 RUN_DIR_RE = re.compile(
-    r"^(plan|ask)-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})(?:-(\d+))?$"
+    r"^(plan|ask|improve)-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})(?:-(\d+))?$"
+)
+
+_CONSENSUS_FILENAMES = (
+    PLAN_FILENAME,
+    ANSWER_FILENAME,
+    IMPROVEMENTS_FILENAME,
 )
 
 
@@ -133,17 +140,21 @@ def list_archived_runs(cwd: Path | None = None) -> list[ArchivedRunSummary]:
 
 
 def _read_primary_doc(run_dir: Path, kind: RunMode) -> str:
-    preferred = run_dir / primary_doc_filename(kind)
+    preferred_name = primary_doc_filename(kind)
+    preferred = run_dir / preferred_name
     try:
         return preferred.read_text(encoding="utf-8")
     except FileNotFoundError:
         pass
 
-    fallback_name = PLAN_FILENAME if kind == "ask" else ANSWER_FILENAME
-    try:
-        return (run_dir / fallback_name).read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return ""
+    for fallback_name in _CONSENSUS_FILENAMES:
+        if fallback_name == preferred_name:
+            continue
+        try:
+            return (run_dir / fallback_name).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            continue
+    return ""
 
 
 def read_archived_run(run_dir: Path | str) -> ArchivedRun:

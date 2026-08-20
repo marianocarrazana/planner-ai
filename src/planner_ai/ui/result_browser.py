@@ -10,6 +10,7 @@ from textual import on
 from textual.widgets import Button, Markdown, Static, Tab, Tabs
 
 from planner_ai.pipeline.types import ProposalState, RunMode
+from planner_ai.ui.plan_helpers import another_label, primary_tab_label, ready_heading
 
 if TYPE_CHECKING:
     from planner_ai.app import PlannerApp
@@ -24,7 +25,7 @@ class ResultTabs(Tabs):
 
 
 class ResultBrowser(Widget):
-    """Primary Plan/Answer tab + per-proposer tabs; live or History detail."""
+    """Primary Plan/Answer/Improvements tab + per-proposer tabs; live or History detail."""
 
     DEFAULT_CSS = """
     ResultBrowser {
@@ -164,8 +165,7 @@ class ResultBrowser(Widget):
         self._on_exit = on_exit
         self._active_tab = PRIMARY_TAB_ID
 
-        is_ask = mode == "ask"
-        primary_label = "Answer" if is_ask else "Plan"
+        primary_label = primary_tab_label(mode)
         self._tabs = [(PRIMARY_TAB_ID, primary_label)]
         for proposal in self._proposals:
             self._tabs.append((proposal.id, proposal.label))
@@ -174,10 +174,8 @@ class ResultBrowser(Widget):
             heading = title
         elif on_exit:
             heading = "Archived run"
-        elif is_ask:
-            heading = "Answer ready"
         else:
-            heading = "Plan ready"
+            heading = ready_heading(mode)
         self.query_one("#rb-heading", Static).update(heading)
 
         has_errors = any(p.status == "error" for p in self._proposals)
@@ -196,8 +194,7 @@ class ResultBrowser(Widget):
         if on_exit:
             another.add_class("-hidden")
         else:
-            another_label = "Ask another" if is_ask else "Plan another"
-            another.label = f"→ {another_label} (or press n)"
+            another.label = f"→ {another_label(mode, capitalize=True)} (or press n)"
             another.remove_class("-hidden")
 
         self._remount_tabs()
