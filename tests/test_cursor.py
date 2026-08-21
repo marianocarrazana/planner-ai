@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -117,6 +118,12 @@ def _install_fakes(
             captured["workspace"] = workspace
             return client
 
+    class FakeLocalAgentStoreConfig:
+        def __init__(self, **kwargs: Any) -> None:
+            self.kwargs = kwargs
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
     class FakeLocalAgentOptions:
         def __init__(self, **kwargs: Any) -> None:
             self.kwargs = kwargs
@@ -147,6 +154,7 @@ def _install_fakes(
     fake_sdk.AsyncClient = FakeAsyncClient
     fake_sdk.AgentOptions = FakeAgentOptions
     fake_sdk.LocalAgentOptions = FakeLocalAgentOptions
+    fake_sdk.LocalAgentStoreConfig = FakeLocalAgentStoreConfig
     fake_sdk.CursorAgentError = FakeCursorAgentError
 
     import sys
@@ -176,6 +184,11 @@ def test_cursor_propose_success(
     assert captured["create"] == {}
     assert captured["local"]["cwd"] == str(tmp_path.resolve())
     assert captured["local"]["setting_sources"] == ["project"]
+    store = captured["local"]["store"]
+    assert store.type == "jsonl"
+    assert Path(store.root_dir).name.startswith("planner-ai-cursor-")
+    assert str(store.root_dir).startswith(tempfile.gettempdir())
+    assert not Path(store.root_dir).exists()
     prompt = captured["agent"].create_kwargs["last_prompt"]
     assert "You are a planning assistant." in prompt
     assert "Goal:\nShip it" in prompt

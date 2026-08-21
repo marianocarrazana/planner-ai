@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
+import tempfile
 from dataclasses import dataclass
 
 from planner_ai.providers.call_abort import (
@@ -34,11 +36,13 @@ async def run_prompt(
         AsyncClient,
         CursorAgentError,
         LocalAgentOptions,
+        LocalAgentStoreConfig,
     )
 
     cwd = get_workspace_cwd()
     abort = create_call_abort(options)
     abort.throw_if_aborted()
+    store_dir = tempfile.mkdtemp(prefix="planner-ai-cursor-")
 
     try:
         async with await AsyncClient.launch_bridge(
@@ -52,6 +56,10 @@ async def run_prompt(
                     local=LocalAgentOptions(
                         cwd=str(cwd),
                         setting_sources=["project"],
+                        store=LocalAgentStoreConfig(
+                            type="jsonl",
+                            root_dir=store_dir,
+                        ),
                     ),
                 ),
             ) as agent:
@@ -120,6 +128,7 @@ async def run_prompt(
         raise
     finally:
         abort.cleanup()
+        shutil.rmtree(store_dir, ignore_errors=True)
 
 
 @dataclass
