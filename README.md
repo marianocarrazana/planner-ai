@@ -49,15 +49,18 @@ planner
 
 Both the Bun and Python CLIs expose the same console name `planner`. If both are on your `PATH`, whichever comes first wins. Prefer one install at a time, or call the Python app explicitly with `uv run --directory /path/to/planner-ai planner`.
 
-## Auth / tokens
+## Authentication
 
-On first run the TUI opens **Auth** when no real credential is set (set at least one real provider; empty Enter cancels a token editor):
+On first run the TUI opens **Auth** when no real provider is connected. Configure at least one provider; empty Enter cancels a token editor:
 
+- **ChatGPT for Codex** — browser login uses your eligible ChatGPT subscription. Device-code login (beta) is available for remote/headless environments and may need to be enabled in ChatGPT security or workspace settings.
 - **Claude Code OAuth token** — run `claude setup-token`, then paste (Team / Pro / Max subscription)
 - **Cursor API key** — from [Cursor Dashboard → Integrations](https://cursor.com/dashboard/integrations)
-- **Codex API key** — from [OpenAI API keys](https://platform.openai.com/api-keys)
+- **Codex API key** — optional fallback from [OpenAI API keys](https://platform.openai.com/api-keys); this uses standard API billing rather than ChatGPT subscription access.
 
-Tokens are saved under the OS user config directory (same path and JSON shape as the TypeScript app):
+Browser login tries to open the system browser and also leaves the sign-in URL visible in the TUI. Device-code login shows a verification URL and one-time code. A successful ChatGPT login replaces any planner-ai Codex API-key configuration.
+
+Claude, Cursor, and optional Codex API-key values are saved under the OS user config directory (same path and JSON shape as the TypeScript app):
 
 - macOS: `~/Library/Application Support/planner-ai/config.json`
 - Linux: `~/.config/planner-ai/config.json` (or `$XDG_CONFIG_HOME/planner-ai`)
@@ -65,9 +68,11 @@ Tokens are saved under the OS user config directory (same path and JSON shape as
 
 Never commit tokens or put them in `.env`. The app does not log credential values.
 
-Providers without a key are omitted; if none are set, mock providers are used. With real keys present, mocks appear only when `includeMocks` is enabled (press `m` on Proposers/Consensus).
+ChatGPT credentials are not stored in planner-ai's config. Codex stores and refreshes them in its standard shared cache or OS keyring, so planner-ai, Codex CLI, and the Codex IDE extension use the same active session. Disconnecting Codex or resetting authentication signs all of those local Codex clients out.
 
-If a stored key fails auth during a run, the error screen offers **`r`** to remove that key from config and re-enter it (or **`q`** to quit). To clear all credentials without launching the TUI:
+Providers without authentication are omitted; if none are connected, mock providers are used. With real providers present, mocks appear only when `includeMocks` is enabled (press `m` on Proposers/Consensus).
+
+If authentication fails during a run, the error screen offers **`r`** to remove a failing key or disconnect a failing ChatGPT session and return to Auth (or **`q`** to quit). To clear all credentials, including the shared Codex session, without launching the TUI:
 
 ```bash
 uv run planner --reset-auth
@@ -93,12 +98,12 @@ Fullscreen alternate-screen UI with tabs:
 | **Plan** | `Ctrl+1` | Plan/Ask/Improve toggle, enter a goal, question, or scope, watch proposals / consensus, browse the result |
 | **Proposers** | `Ctrl+2` | Pick proposer models (multi) — Claude / Cursor / Codex / Mock |
 | **Consensus** | `Ctrl+3` | Pick the consensus model (single) |
-| **Auth** | `Ctrl+4` | Set or clear Claude OAuth / Cursor / Codex API keys |
+| **Auth** | `Ctrl+4` | Connect ChatGPT or manage Claude / Cursor / Codex credentials |
 | **History** | `Ctrl+5` | Browse past successful runs archived under `.planner-ai/` |
 
 You can also click the tab labels. On Models: click a row or use `↑↓` / `PgUp`/`PgDn`, `Space` toggle/choose, `/` filter, `m` toggle mocks, `c` continues to Plan.
 
-Startup opens **Auth** if no real credential is set, else **Proposers** if there is no saved selection, else **Plan**.
+Startup opens **Auth** if no real provider is authenticated, else **Proposers** if there is no saved selection, else **Plan**.
 
 ## How it works
 

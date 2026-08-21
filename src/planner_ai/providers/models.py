@@ -37,6 +37,7 @@ class ProviderCredentialsForModels(TypedDict, total=False):
 
 class AvailableChoicesOptions(TypedDict, total=False):
     includeMocks: bool
+    codexAuthenticated: bool
 
 
 _PROVIDER_KINDS: frozenset[str] = frozenset(get_args(ProviderKind))
@@ -254,12 +255,16 @@ async def available_choices(
     if cursor_key:
         choices.extend(await load_cursor_choices(cursor_key))
 
-    if codex_key:
+    codex_authenticated = (
+        codex_key is not None
+        or (opts is not None and opts.get("codexAuthenticated") is True)
+    )
+    if codex_authenticated:
         choices.extend(load_codex_choices())
 
     include_mocks = opts is not None and opts.get("includeMocks") is True
     show_mocks = include_mocks or (
-        not claude_token and not cursor_key and not codex_key
+        not claude_token and not cursor_key and not codex_authenticated
     )
     if show_mocks:
         choices.extend(MOCK_MODELS)

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 from planner_ai.config import ConfigCredentialKey
 from planner_ai.pipeline.types import ProposalState
+
+AuthRecoveryTarget = ConfigCredentialKey | Literal["codexSession"]
 
 AUTH_ERROR_PATTERNS = [
     re.compile(r"invalid auth", re.I),
@@ -21,7 +24,11 @@ def is_auth_error_message(message: str) -> bool:
     return any(pattern.search(message) for pattern in AUTH_ERROR_PATTERNS)
 
 
-def credential_key_for_provider(kind: str) -> ConfigCredentialKey | None:
+def credential_key_for_provider(
+    kind: str,
+    *,
+    codex_uses_config_key: bool = True,
+) -> AuthRecoveryTarget | None:
     base = kind[: kind.index(":")] if ":" in kind else kind
     match base:
         case "anthropic":
@@ -29,7 +36,7 @@ def credential_key_for_provider(kind: str) -> ConfigCredentialKey | None:
         case "cursor":
             return "cursorApiKey"
         case "codex":
-            return "codexApiKey"
+            return "codexApiKey" if codex_uses_config_key else "codexSession"
         case _:
             return None
 
@@ -39,20 +46,27 @@ def collect_failing_credential_keys(
     proposals: list[ProposalState],
     error_message: str,
     consensus_source: str,
-) -> list[ConfigCredentialKey]:
-    keys: set[ConfigCredentialKey] = set()
+    codex_uses_config_key: bool = True,
+) -> list[AuthRecoveryTarget]:
+    keys: set[AuthRecoveryTarget] = set()
 
     for proposal in proposals:
         if proposal.status != "error" or not proposal.error:
             continue
         if not is_auth_error_message(proposal.error):
             continue
-        key = credential_key_for_provider(proposal.id)
+        key = credential_key_for_provider(
+            proposal.id,
+            codex_uses_config_key=codex_uses_config_key,
+        )
         if key:
             keys.add(key)
 
     if is_auth_error_message(error_message):
-        key = credential_key_for_provider(consensus_source)
+        key = credential_key_for_provider(
+            consensus_source,
+            codex_uses_config_key=codex_uses_config_key,
+        )
         if key:
             keys.add(key)
 
@@ -73,6 +87,10 @@ def collect_failing_credential_keys(
                 error_message,
                 re.I,
             ):
-                keys.add("codexApiKey")
+                keys.add(
+                    "codexApiKey"
+                    if codex_uses_config_key
+                    else "codexSession"
+                )
 
     return list(keys)

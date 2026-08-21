@@ -145,6 +145,20 @@ def test_codex_propose_success(
     assert "Goal:\nShip it" in prompt
 
 
+def test_codex_propose_reuses_cached_session(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    captured = _install_fakes(monkeypatch)
+
+    proposer = create_codex_proposer(None, "gpt-5.2", "GPT-5.2")
+    assert asyncio.run(proposer.propose("Use subscription")) == "# Codex plan"
+
+    assert captured["codex"].config is None
+    assert captured["codex"].logged_in == []
+    assert captured["codex"].start_kwargs["sandbox"] == "read-only"
+
+
 def test_codex_empty_text(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

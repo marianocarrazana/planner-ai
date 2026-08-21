@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import (
@@ -21,7 +23,19 @@ from planner_ai.config import (
 )
 from planner_ai.pipeline.run_pipeline import run_pipeline
 from planner_ai.pipeline.types import Phase, PipelineCallbacks, ProposalState, RunMode
-from planner_ai.providers.auth_error import collect_failing_credential_keys
+from planner_ai.providers.auth_error import (
+    AuthRecoveryTarget,
+    collect_failing_credential_keys,
+)
+from planner_ai.providers.codex_auth import (
+    CodexAuthStatus,
+    CodexLoginDetails,
+    CodexLoginMethod,
+    api_key_auth_status,
+    login_codex_chatgpt,
+    logout_codex,
+    read_codex_auth_status,
+)
 from planner_ai.providers.models import (
     ModelChoice,
     ModelSelection,
@@ -36,6 +50,7 @@ from planner_ai.ui.history_screen import HistoryScreen
 from planner_ai.ui.model_select import ModelSelect
 from planner_ai.ui.plan_helpers import (
     has_any_real_credential,
+    has_any_real_provider,
     header_prefix,
     plan_gate,
 )
@@ -50,7 +65,7 @@ from planner_ai.ui.tabs import (
 from planner_ai.workspace import get_workspace_cwd
 
 
-def credential_label(key: ConfigCredentialKey) -> str:
+def credential_label(key: AuthRecoveryTarget) -> str:
     match key:
         case "claudeCodeOAuthToken":
             return "Claude OAuth token"
@@ -58,10 +73,12 @@ def credential_label(key: ConfigCredentialKey) -> str:
             return "Cursor API key"
         case "codexApiKey":
             return "Codex API key"
+        case "codexSession":
+            return "Codex ChatGPT session"
 
 
 def startup_tab(creds: AppConfig, choices: list[ModelChoice]) -> AppTab:
-    if not has_any_real_credential(creds):
+    if not has_any_real_credential(creds) and not has_any_real_provider(choices):
         return "auth"
     if not normalize_selection(creds.get("modelSelection"), choices):
         return "proposers"
@@ -139,7 +156,9 @@ class PlannerApp(App[None]):
         self.archive_path: str | None = None
         self.plan: str | None = None
         self.error: str | None = None
-        self.failing_keys: list[ConfigCredentialKey] = []
+        self.failing_keys: list[AuthRecoveryTarget] = []
+        self.codex_auth = CodexAuthStatus(authenticated=False)
+        self._codex_login_worker = None
         self.loading_choices = False
         self._syncing_app_tabs = False
 
@@ -204,7 +223,7 @@ class PlannerApp(App[None]):
     def _sync_plan_screen(self) -> None:
         self.query_one("#plan", PlanScreen).sync(
             phase=self.phase,
-            gate=plan_gate(self.providers, self.config),
+            gate=plan_gate(self.providers, self.config, self.choices),
             mode=self.run_mode,
             proposals=self.proposals,
             consensus_started_at=self.consensus_started_at,
@@ -393,6 +412,7 @@ class PlannerApp(App[None]):
                 proposals=latest,
                 error_message=message,
                 consensus_source=providers.sources["consensus"],
+                codex_uses_config_key=bool(self.config.get("codexApiKey")),
             )
             self.failing_keys = keys
             self.phase = "error"
@@ -409,7 +429,19 @@ class PlannerApp(App[None]):
         if len(self.failing_keys) == 0:
             return
         try:
-            next_config = clear_credentials(self.failing_keys)
+            logout_error: Exception | None = None
+            config_keys = [
+                key for key in self.failing_keys if key != "codexSession"
+            ]
+            if any(
+                key in ("codexSession", "codexApiKey")
+                for key in self.failing_keys
+            ):
+                try:
+                    await logout_codex()
+                except Exception as err:
+                    logout_error = err
+            next_config = clear_credentials(config_keys)
             self.providers = None
             self.draft_selection = None
             self.choices = []
@@ -423,6 +455,11 @@ class PlannerApp(App[None]):
             self.plan = None
             self.phase = "idle"
             await self.reload_models(next_config, "auth")
+            if logout_error is not None:
+                self.notify(
+                    f"Unable to clear the shared Codex session: {logout_error}",
+                    severity="error",
+                )
         except Exception as err:
             self.error = str(err) if str(err) else repr(err)
             self._sync_plan_screen()
@@ -439,9 +476,16 @@ class PlannerApp(App[None]):
         self._sync_model_selects()
 
         try:
+            if creds.get("codexApiKey"):
+                self.codex_auth = api_key_auth_status()
+            else:
+                self.codex_auth = await read_codex_auth_status()
             next_choices = await available_choices(
                 creds,
-                {"includeMocks": creds.get("includeMocks") is True},
+                {
+                    "includeMocks": creds.get("includeMocks") is True,
+                    "codexAuthenticated": self.codex_auth.authenticated,
+                },
             )
             saved_valid = normalize_selection(
                 creds.get("modelSelection"),
@@ -459,11 +503,12 @@ class PlannerApp(App[None]):
                     creds,
                     next_selection,
                     next_choices,
+                    codex_authenticated=self.codex_auth.authenticated,
                 )
             else:
                 self.providers = None
 
-            self.query_one(AuthScreen).sync_config(creds)
+            self.query_one(AuthScreen).sync_config(creds, self.codex_auth)
             self._refresh_header()
             self._sync_plan_screen()
             self.go_tab(
@@ -490,6 +535,7 @@ class PlannerApp(App[None]):
                 next_config,
                 next_selection,
                 self.choices,
+                codex_authenticated=self.codex_auth.authenticated,
             )
             self.phase = "idle"
             self.error = None
@@ -548,13 +594,57 @@ class PlannerApp(App[None]):
             self.go_tab("plan")
             self._sync_plan_screen()
 
+    def start_codex_login(self, method: CodexLoginMethod) -> None:
+        self._codex_login_worker = self.run_worker(
+            self.on_codex_login(method),
+            name="codex-login",
+            group="codex-login",
+            exclusive=True,
+            exit_on_error=False,
+        )
+
+    def cancel_codex_login(self) -> None:
+        if self._codex_login_worker is not None:
+            self._codex_login_worker.cancel()
+            self._codex_login_worker = None
+
+    async def on_codex_login(self, method: CodexLoginMethod) -> None:
+        auth = self.query_one(AuthScreen)
+
+        def on_ready(details: CodexLoginDetails) -> None:
+            auth.show_codex_login_details(details)
+
+        try:
+            self.codex_auth = await login_codex_chatgpt(method, on_ready)
+            next_config = save_config({"codexApiKey": ""})
+            auth.mode = "overview"
+            await self.reload_models(next_config, "auth")
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:
+            message = str(err) if str(err) else repr(err)
+            auth.show_codex_login_error(message)
+        finally:
+            self._codex_login_worker = None
+
     async def on_clear_credentials(self, keys: list[ConfigCredentialKey]) -> None:
         try:
+            logout_error: Exception | None = None
+            if "codexApiKey" in keys:
+                try:
+                    await logout_codex()
+                except Exception as err:
+                    logout_error = err
             next_config = clear_credentials(keys)
             self.providers = None
             self.draft_selection = None
             self.phase = "idle"
             await self.reload_models(next_config, "auth")
+            if logout_error is not None:
+                self.notify(
+                    f"Unable to clear the shared Codex session: {logout_error}",
+                    severity="error",
+                )
         except Exception as err:
             self.phase = "error"
             self.error = str(err) if str(err) else repr(err)

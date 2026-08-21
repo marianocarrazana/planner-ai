@@ -4,6 +4,7 @@ from typing import Literal
 
 from planner_ai.config import AppConfig
 from planner_ai.pipeline.types import ProposalStatus, RunMode
+from planner_ai.providers.models import ModelChoice
 from planner_ai.providers.resolve import ResolvedProviders, ResolvedSources
 
 PlanGate = Literal["ready", "need-models", "need-auth"]
@@ -15,6 +16,10 @@ def has_any_real_credential(creds: AppConfig) -> bool:
         or creds.get("cursorApiKey")
         or creds.get("codexApiKey")
     )
+
+
+def has_any_real_provider(choices: list[ModelChoice]) -> bool:
+    return any(choice["provider"] != "mock" for choice in choices)
 
 
 def format_proposer_sources(sources: ResolvedSources | dict[str, object]) -> str:
@@ -40,10 +45,13 @@ def format_sources(sources: ResolvedSources | dict[str, object]) -> str:
 def plan_gate(
     providers: ResolvedProviders | None,
     config: AppConfig,
+    choices: list[ModelChoice] | None = None,
 ) -> PlanGate:
     if providers is not None:
         return "ready"
-    if not has_any_real_credential(config):
+    if not has_any_real_credential(config) and not has_any_real_provider(
+        choices or []
+    ):
         return "need-auth"
     return "need-models"
 

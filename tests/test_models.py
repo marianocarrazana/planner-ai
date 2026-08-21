@@ -105,6 +105,13 @@ def test_available_choices_codex_key_adds_static_list() -> None:
     assert choices == CODEX_FALLBACK_MODELS
 
 
+def test_available_choices_cached_codex_session_adds_static_list() -> None:
+    choices = asyncio.run(
+        available_choices({}, {"codexAuthenticated": True})
+    )
+    assert choices == CODEX_FALLBACK_MODELS
+
+
 def test_load_anthropic_choices_paginates_and_dedupes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

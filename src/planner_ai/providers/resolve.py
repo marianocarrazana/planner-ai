@@ -57,7 +57,12 @@ def _non_empty(value: str | None) -> str | None:
     return trimmed if trimmed else None
 
 
-def _require_creds(provider: ProviderKind, creds: ProviderCredentials) -> None:
+def _require_creds(
+    provider: ProviderKind,
+    creds: ProviderCredentials,
+    *,
+    codex_authenticated: bool,
+) -> None:
     if provider == "anthropic" and not _non_empty(
         creds.get("claudeCodeOAuthToken")
     ):
@@ -66,16 +71,26 @@ def _require_creds(provider: ProviderKind, creds: ProviderCredentials) -> None:
         )
     if provider == "cursor" and not _non_empty(creds.get("cursorApiKey")):
         raise ValueError("Selected Cursor model but Cursor API key is missing")
-    if provider == "codex" and not _non_empty(creds.get("codexApiKey")):
-        raise ValueError("Selected Codex model but Codex API key is missing")
+    if (
+        provider == "codex"
+        and not codex_authenticated
+        and not _non_empty(creds.get("codexApiKey"))
+    ):
+        raise ValueError("Selected Codex model but Codex authentication is missing")
 
 
 def _create_proposer(
     pick: ModelPick,
     creds: ProviderCredentials,
     choices: list[ModelChoice],
+    *,
+    codex_authenticated: bool,
 ) -> ModelProvider:
-    _require_creds(pick["provider"], creds)
+    _require_creds(
+        pick["provider"],
+        creds,
+        codex_authenticated=codex_authenticated,
+    )
     label = find_choice_label(choices, pick)
     provider_id = f"{pick['provider']}:{pick['modelId']}"
 
@@ -97,7 +112,6 @@ def _create_proposer(
         from planner_ai.providers.codex import create_codex_proposer
 
         api_key = _non_empty(creds.get("codexApiKey"))
-        assert api_key is not None
         return create_codex_proposer(api_key, pick["modelId"], label)
 
     mock = next((p for p in mock_proposers if p.id == pick["modelId"]), None)
@@ -109,8 +123,14 @@ def _create_proposer(
 def _create_consensus(
     pick: ModelPick,
     creds: ProviderCredentials,
+    *,
+    codex_authenticated: bool,
 ) -> ConsensusProvider:
-    _require_creds(pick["provider"], creds)
+    _require_creds(
+        pick["provider"],
+        creds,
+        codex_authenticated=codex_authenticated,
+    )
 
     if pick["provider"] == "anthropic":
         from planner_ai.providers.anthropic import create_anthropic_consensus
@@ -130,7 +150,6 @@ def _create_consensus(
         from planner_ai.providers.codex import create_codex_consensus
 
         api_key = _non_empty(creds.get("codexApiKey"))
-        assert api_key is not None
         return create_codex_consensus(api_key, pick["modelId"])
 
     return mock_consensus
@@ -140,6 +159,8 @@ def resolve_providers(
     creds: ProviderCredentials | None,
     selection: ModelSelection,
     choices: list[ModelChoice] | None = None,
+    *,
+    codex_authenticated: bool = False,
 ) -> ResolvedProviders:
     if creds is None:
         creds = {}
@@ -150,9 +171,19 @@ def resolve_providers(
         raise ValueError("Select at least one proposer model")
 
     proposers = [
-        _create_proposer(pick, creds, choices) for pick in selection["proposers"]
+        _create_proposer(
+            pick,
+            creds,
+            choices,
+            codex_authenticated=codex_authenticated,
+        )
+        for pick in selection["proposers"]
     ]
-    consensus = _create_consensus(selection["consensus"], creds)
+    consensus = _create_consensus(
+        selection["consensus"],
+        creds,
+        codex_authenticated=codex_authenticated,
+    )
 
     return ResolvedProviders(
         proposers=proposers,

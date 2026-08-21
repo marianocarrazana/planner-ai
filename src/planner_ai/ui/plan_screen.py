@@ -149,8 +149,8 @@ class PlanScreen(Widget):
             with Vertical(id="need-auth"):
                 yield Static("Plan", id="gate-title-auth")
                 yield Static(
-                    "Add at least one provider token (or skip both for mocks) on the Auth "
-                    "tab, then pick proposers and consensus.",
+                    "Connect or configure at least one real provider on the Auth tab, "
+                    "then pick proposers and consensus.",
                     id="gate-body-auth",
                     classes="gate-body",
                 )

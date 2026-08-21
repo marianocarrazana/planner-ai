@@ -22,7 +22,7 @@ from planner_ai.workspace import get_workspace_cwd
 
 
 async def run_prompt(
-    api_key: str,
+    api_key: str | None,
     model_id: str,
     prompt: str,
     options: ProviderCallOptions | None = None,
@@ -35,10 +35,14 @@ async def run_prompt(
     abort.throw_if_aborted()
 
     try:
-        async with AsyncCodex(
+        config = (
             CodexConfig(env={"CODEX_API_KEY": api_key})
-        ) as codex:
-            await codex.login_api_key(api_key)
+            if api_key is not None
+            else None
+        )
+        async with AsyncCodex(config) as codex:
+            if api_key is not None:
+                await codex.login_api_key(api_key)
             thread = await codex.thread_start(
                 model=model_id,
                 cwd=str(cwd),
@@ -83,7 +87,7 @@ async def run_prompt(
 class CodexProposer:
     id: str
     label: str
-    _api_key: str
+    _api_key: str | None
     _model_id: str
 
     async def propose(
@@ -104,7 +108,7 @@ class CodexProposer:
 
 @dataclass
 class CodexConsensus:
-    _api_key: str
+    _api_key: str | None
     _model_id: str
 
     async def reconcile(
@@ -127,7 +131,7 @@ class CodexConsensus:
 
 
 def create_codex_proposer(
-    api_key: str,
+    api_key: str | None,
     model_id: str,
     label: str,
 ) -> ModelProvider:
@@ -140,7 +144,7 @@ def create_codex_proposer(
 
 
 def create_codex_consensus(
-    api_key: str,
+    api_key: str | None,
     model_id: str,
 ) -> ConsensusProvider:
     return CodexConsensus(_api_key=api_key, _model_id=model_id)

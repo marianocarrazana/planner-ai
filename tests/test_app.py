@@ -14,7 +14,8 @@ from planner_ai.app import (
     startup_tab,
 )
 from planner_ai.config import save_config
-from planner_ai.providers.models import MOCK_MODELS
+from planner_ai.providers.codex_auth import CodexAuthStatus
+from planner_ai.providers.models import CODEX_FALLBACK_MODELS, MOCK_MODELS
 from planner_ai.ui.plan_helpers import format_sources, has_any_real_credential
 from planner_ai.ui.tabs import AppTabs
 from planner_ai.workspace import get_workspace_cwd
@@ -52,6 +53,10 @@ def test_credential_label() -> None:
 
 def test_startup_tab_auth_when_no_creds() -> None:
     assert startup_tab({}, MOCK_MODELS) == "auth"
+
+
+def test_startup_tab_accepts_cached_codex_session() -> None:
+    assert startup_tab({}, CODEX_FALLBACK_MODELS) == "proposers"
 
 
 def test_startup_tab_proposers_when_selection_invalid() -> None:
@@ -217,5 +222,69 @@ def test_clear_credentials_stays_on_auth(
             await pilot.pause()
             assert app.active_tab == "auth"
             assert "cursorApiKey" not in config_mod.load_config()
+
+    asyncio.run(run())
+
+
+def test_cached_chatgpt_session_enables_codex_models(
+    config_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connected = CodexAuthStatus(
+        authenticated=True,
+        method="chatgpt",
+        plan="team",
+    )
+
+    async def read_connected() -> CodexAuthStatus:
+        return connected
+
+    async def fake_choices(_creds, opts=None):
+        assert opts["codexAuthenticated"] is True
+        return list(CODEX_FALLBACK_MODELS)
+
+    monkeypatch.setattr("planner_ai.app.load_config", lambda: {})
+    monkeypatch.setattr("planner_ai.app.read_codex_auth_status", read_connected)
+    monkeypatch.setattr("planner_ai.app.available_choices", fake_choices)
+
+    async def run() -> None:
+        app = PlannerApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            assert app.active_tab == "proposers"
+            assert app.codex_auth == connected
+            assert app.choices == CODEX_FALLBACK_MODELS
+
+    asyncio.run(run())
+
+
+def test_clear_codex_logs_out_shared_session(
+    config_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    save_config({"codexApiKey": "codex-key"})
+    logged_out: list[bool] = []
+
+    async def fake_logout() -> None:
+        logged_out.append(True)
+
+    async def fake_choices(_creds, _opts=None):
+        return list(MOCK_MODELS)
+
+    monkeypatch.setattr(
+        "planner_ai.app.load_config",
+        lambda: {"codexApiKey": "codex-key"},
+    )
+    monkeypatch.setattr("planner_ai.app.logout_codex", fake_logout)
+    monkeypatch.setattr("planner_ai.app.available_choices", fake_choices)
+
+    async def run() -> None:
+        app = PlannerApp()
+        async with app.run_test() as pilot:
+            await app.on_clear_credentials(["codexApiKey"])
+            await pilot.pause()
+            assert logged_out == [True]
+            assert "codexApiKey" not in config_mod.load_config()
+            assert app.active_tab == "auth"
 
     asyncio.run(run())

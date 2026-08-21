@@ -87,7 +87,7 @@ def test_resolve_providers_requires_creds_before_real_factory() -> None:
         )
     with pytest.raises(
         ValueError,
-        match=r"Selected Codex model but Codex API key is missing",
+        match=r"Selected Codex model but Codex authentication is missing",
     ):
         resolve_providers(
             {"codexApiKey": "  "},
@@ -151,3 +151,16 @@ def test_resolve_providers_constructs_real_factories() -> None:
         "consensus": "anthropic:claude-sonnet",
     }
     assert hasattr(resolved.consensus, "reconcile")
+
+
+def test_resolve_providers_accepts_cached_codex_session() -> None:
+    selection = {
+        "proposers": [{"provider": "codex", "modelId": "gpt-5.2"}],
+        "consensus": {"provider": "codex", "modelId": "gpt-5.2"},
+    }
+    resolved = resolve_providers(
+        {},
+        selection,
+        codex_authenticated=True,
+    )
+    assert resolved.proposers[0].id == "codex:gpt-5.2"

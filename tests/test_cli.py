@@ -32,7 +32,12 @@ def test_reset_auth_clears_keys_and_skips_tui(
     assert load_config().get("claudeCodeOAuthToken") == "claude-token"
 
     run_mock = MagicMock()
+    logout_mock = MagicMock()
     monkeypatch.setattr("planner_ai.app.PlannerApp.run", run_mock)
+    monkeypatch.setattr(
+        "planner_ai.providers.codex_auth.logout_codex_sync",
+        logout_mock,
+    )
     monkeypatch.setattr(cli.sys, "argv", ["planner", "--reset-auth"])
 
     cli.main()
@@ -47,6 +52,7 @@ def test_reset_auth_clears_keys_and_skips_tui(
     assert "codexApiKey" not in loaded
     assert loaded.get("includeMocks") is True
     run_mock.assert_not_called()
+    logout_mock.assert_called_once_with()
 
 
 def test_main_launches_app_without_reset_auth(

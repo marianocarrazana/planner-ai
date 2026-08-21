@@ -37,6 +37,10 @@ def test_credential_key_for_provider() -> None:
     )
     assert credential_key_for_provider("cursor:composer-2.5") == "cursorApiKey"
     assert credential_key_for_provider("codex:gpt-5.2") == "codexApiKey"
+    assert credential_key_for_provider(
+        "codex:gpt-5.2",
+        codex_uses_config_key=False,
+    ) == "codexSession"
     assert credential_key_for_provider("alpha") is None
     assert credential_key_for_provider("mock:alpha") is None
 
@@ -99,3 +103,11 @@ def test_collect_fallback_from_message_when_mock_consensus() -> None:
         consensus_source="alpha",
     )
     assert "codexApiKey" in keys
+
+    keys = collect_failing_credential_keys(
+        proposals=[],
+        error_message="Codex authentication required",
+        consensus_source="mock:alpha",
+        codex_uses_config_key=False,
+    )
+    assert "codexSession" in keys
